@@ -1,0 +1,106 @@
+#region license
+// Copyright 2026 Utah Departement of Transportation
+// for DataMigrator - DataMigrator.Commands/UpgradeTo52Command.cs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
+using DataMigrator.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using System.CommandLine;
+using System.CommandLine.Hosting;
+using System.CommandLine.NamingConventionBinder;
+
+namespace DataMigrator.Commands;
+
+public sealed class UpgradeTo52Command : Command, ICommandOption<UpgradeTo52CommandConfiguration>
+{
+    public UpgradeTo52Command() : base("upgrade-to-5-2", "Run the standard ATSPM 4.3 to 5.2 migration sequence")
+    {
+        AddOption(SourceOption);
+        AddOption(StartOption);
+        AddOption(EndOption);
+        AddOption(DeleteOption);
+        AddOption(UpdateLocationsOption);
+        AddOption(ImportSpeedDevicesOption);
+        AddOption(BatchOption);
+        AddOption(DeviceOption);
+        AddOption(LocationsOption);
+        AddOption(SkipConfigOption);
+        AddOption(SkipEventsOption);
+        AddOption(SkipSpeedOption);
+    }
+
+    public Option<string> SourceOption { get; } = new("--source", "Connection string for the ATSPM 4.3 SQL Server source") { IsRequired = true };
+    public Option<DateTime> StartOption { get; } = new("--start", "Start date/time for event and speed migration") { IsRequired = true };
+    public Option<DateTime> EndOption { get; } = new("--end", "End date/time for event and speed migration") { IsRequired = true };
+    public Option<bool> DeleteOption { get; } = new("--delete", "Delete target configuration data before importing");
+    public Option<bool> UpdateLocationsOption { get; } = new("--update-locations", () => true, "Import configuration and location data into the target");
+    public Option<bool> ImportSpeedDevicesOption { get; } = new("--update-speed", () => true, "Import speed-device configuration into the target");
+    public Option<int?> BatchOption { get; } = new("--batch", "Batch size for inserting compressed event log records") { IsRequired = false };
+    public Option<int?> DeviceOption { get; } = new("--device", "Limit event migration to one ATSPM device type id") { IsRequired = false };
+    public Option<string> LocationsOption { get; } = new("--locations", "Comma-separated list of location identifiers") { IsRequired = false };
+    public Option<bool> SkipConfigOption { get; } = new("--skip-config", "Skip configuration migration");
+    public Option<bool> SkipEventsOption { get; } = new("--skip-events", "Skip event log migration");
+    public Option<bool> SkipSpeedOption { get; } = new("--skip-speed", "Skip speed-event migration");
+
+    public ModelBinder<UpgradeTo52CommandConfiguration> GetOptionsBinder()
+    {
+        var binder = new ModelBinder<UpgradeTo52CommandConfiguration>();
+        binder.BindMemberFromValue(c => c.Source, SourceOption);
+        binder.BindMemberFromValue(c => c.Start, StartOption);
+        binder.BindMemberFromValue(c => c.End, EndOption);
+        binder.BindMemberFromValue(c => c.Delete, DeleteOption);
+        binder.BindMemberFromValue(c => c.UpdateLocations, UpdateLocationsOption);
+        binder.BindMemberFromValue(c => c.ImportSpeedDevices, ImportSpeedDevicesOption);
+        binder.BindMemberFromValue(c => c.Batch, BatchOption);
+        binder.BindMemberFromValue(c => c.Device, DeviceOption);
+        binder.BindMemberFromValue(c => c.Locations, LocationsOption);
+        binder.BindMemberFromValue(c => c.SkipConfig, SkipConfigOption);
+        binder.BindMemberFromValue(c => c.SkipEvents, SkipEventsOption);
+        binder.BindMemberFromValue(c => c.SkipSpeed, SkipSpeedOption);
+        return binder;
+    }
+
+    public void BindCommandOptions(HostBuilderContext host, IServiceCollection services)
+    {
+        var binder = GetOptionsBinder();
+        services.AddSingleton(binder);
+        services.AddSingleton(sp => (UpgradeTo52CommandConfiguration)binder.CreateInstance(host.GetInvocationContext().BindingContext)!);
+        services.AddSingleton<Microsoft.Extensions.Options.IOptions<UpgradeTo52CommandConfiguration>>(sp => Microsoft.Extensions.Options.Options.Create(sp.GetRequiredService<UpgradeTo52CommandConfiguration>()));
+        services.AddSingleton<IConfigurationMigrationService, ConfigurationMigrationService>();
+        services.AddSingleton<IEventLogMigrationService, EventLogMigrationService>();
+        services.AddSingleton<ISpeedEventMigrationService, SpeedEventMigrationService>();
+        services.AddHostedService<UpgradeTo52HostedService>();
+    }
+}
+
+public sealed class UpgradeTo52CommandConfiguration
+{
+    public string Source { get; set; } = string.Empty;
+    public DateTime Start { get; set; }
+    public DateTime End { get; set; }
+    public bool Delete { get; set; }
+    public bool UpdateLocations { get; set; } = true;
+    public bool ImportSpeedDevices { get; set; } = true;
+    public int? Batch { get; set; }
+    public int? Device { get; set; }
+    public string? Locations { get; set; }
+    public bool SkipConfig { get; set; }
+    public bool SkipEvents { get; set; }
+    public bool SkipSpeed { get; set; }
+}
+
+
+

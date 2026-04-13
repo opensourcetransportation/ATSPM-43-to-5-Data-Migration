@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>DataMigrator</AssemblyName>
+    <RootNamespace>DataMigrator</RootNamespace>
+    <Version>5.2.0</Version>
+    <Authors>OpenSourceTransportation</Authors>
+    <Company>OpenSourceTransportation</Company>
+    <Description>Data migration utility for moving ATSPM 4.3 data into ATSPM 5.2.</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/opensourcetransportation/ATSPM-43-to-5-Data-Migration</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/opensourcetransportation/ATSPM-43-to-5-Data-Migration</RepositoryUrl>
+    <UserSecretsId>c6d602c6-cbe9-4f51-84a9-05406d68c3cc</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.0" />
+    <PackageReference Include="Polly" Version="8.5.2" />
+    <PackageReference Include="Polly.Contrib.WaitAndRetry" Version="1.1.1" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.8.6" />
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+    <PackageReference Include="System.CommandLine.Hosting" Version="0.4.0-alpha.22272.1" />
+    <PackageReference Include="Utah.Udot.Atspm" Version="5.2.0" />
+    <PackageReference Include="Utah.Udot.Atspm.Infrastructure" Version="5.2.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+    <EmbeddedResource Remove="tests\**\*" />
+    <None Remove="tests\**\*" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>

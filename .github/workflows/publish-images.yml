@@ -1,0 +1,71 @@
+name: Publish Image
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version or tag suffix without the leading v
+        required: true
+        type: string
+      publish_latest:
+        description: Also publish the latest tag during manual dispatch
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute tags
+        id: meta
+        shell: bash
+        run: |
+          IMAGE_REPO="ghcr.io/${GITHUB_REPOSITORY}"
+          IMAGE_REPO_LC=$(echo "$IMAGE_REPO" | tr '[:upper:]' '[:lower:]')
+
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION_TAG="${GITHUB_REF_NAME}"
+            IS_PRERELEASE="${{ github.event.release.prerelease }}"
+            PUBLISH_LATEST=false
+            if [ "$IS_PRERELEASE" != "true" ]; then
+              PUBLISH_LATEST=true
+            fi
+          else
+            VERSION_TAG="v${{ inputs.version }}"
+            PUBLISH_LATEST="${{ inputs.publish_latest }}"
+          fi
+
+          echo "version_tag=$VERSION_TAG" >> "$GITHUB_OUTPUT"
+          if [ "$PUBLISH_LATEST" = "true" ]; then
+            echo "tags=${IMAGE_REPO_LC}:${VERSION_TAG},${IMAGE_REPO_LC}:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=${IMAGE_REPO_LC}:${VERSION_TAG}" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version_tag }}
+            org.opencontainers.image.description=${{ github.event.release.body || '' }}
+
+

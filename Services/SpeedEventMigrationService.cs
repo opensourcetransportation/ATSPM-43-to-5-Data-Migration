@@ -1,3 +1,20 @@
+#region license
+// Copyright 2026 Utah Departement of Transportation
+// for DataMigrator - DataMigrator.Services/SpeedEventMigrationService.cs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 using DataMigrator.Commands;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -32,13 +49,20 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
 
     public async Task RunAsync(MigrationCommandConfiguration config, CancellationToken cancellationToken)
     {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(config.Start, config.End, treatDateOnlyEndAsWholeDay: true);
+        var processedHours = 0;
+        var totalLocationReads = 0;
+        var totalCompressedWindows = 0;
+        var totalSourceEvents = 0;
 
         foreach (var (periodStart, periodEnd) in MigrationDateRange.EnumerateHourlyWindows(config.Start, endExclusive))
         {
+            processedHours++;
             _logger.LogInformation("Processing speed events from {Start} to {End}", periodStart, periodEnd);
 
             var locations = LoadCurrentLocations(config.Locations);
+            totalLocationReads += locations.Count;
             _logger.LogInformation("Loaded {Count} speed-migration locations for the current window.", locations.Count);
 
             var archiveLogs = new ConcurrentBag<CompressedEventLogs<SpeedEvent>>();
@@ -49,17 +73,28 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
                 await Task.WhenAll(tasks);
                 if (archiveLogs.Count > 50)
                 {
+                    totalCompressedWindows += archiveLogs.Count;
+                    totalSourceEvents += archiveLogs.Sum(log => log.Data.Count);
                     await FlushLogsAsync(archiveLogs, cancellationToken);
                 }
             }
 
             if (!archiveLogs.IsEmpty)
             {
+                totalCompressedWindows += archiveLogs.Count;
+                totalSourceEvents += archiveLogs.Sum(log => log.Data.Count);
                 await FlushLogsAsync(archiveLogs, cancellationToken);
             }
         }
 
-        _logger.LogInformation("Speed-event migration completed.");
+        stopwatch.Stop();
+        _logger.LogInformation(
+            "Speed-event migration completed in {ElapsedMs} ms. HoursProcessed={HoursProcessed}, LocationReads={LocationReads}, SourceEventsLoaded={SourceEventsLoaded}, CompressedWindowsWritten={CompressedWindowsWritten}.",
+            stopwatch.ElapsedMilliseconds,
+            processedHours,
+            totalLocationReads,
+            totalSourceEvents,
+            totalCompressedWindows);
     }
 
     private async Task ProcessLocationWithRetryAsync(DateTime startUtc, DateTime endUtc, Location location, ConcurrentBag<CompressedEventLogs<SpeedEvent>> archiveLogs, string sourceConnectionString, CancellationToken cancellationToken)
@@ -313,6 +348,9 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
                                 OPTION (RECOMPILE)";
     }
 }
+
+
+
 
 
 

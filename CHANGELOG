@@ -1,0 +1,19 @@
+# Changelog
+
+All notable changes to this project will be documented here.
+
+## [Unreleased]
+
+### Added
+
+- Initial release of DataMigrator as a standalone .NET 8 migration utility
+- `transfer-config` command for migrating ATSPM 4.3 configuration (locations, devices, approaches, detectors, routes, jurisdictions, areas, regions)
+- `transfer-events` command for migrating controller event logs with hourly window processing and rerun-safe replacement
+- `transfer-speed` command for migrating speed events with batch flushing and rerun-safe replacement
+- `upgrade-to-5-2` command for orchestrating all three migration phases in sequence with skip flags
+- Polly retry policies for resilient source queries
+- PostgreSQL sequence reset after bulk configuration import
+- Import metrics summary logged at end of speed event migration
+- Release automation via GitHub Actions for Windows executable and container image
+- Full documentation: usage, configuration, installation, upgrade guide, troubleshooting, and design
+- Test coverage for commands, hosted services, date range utilities, location filtering, speed migration connection normalization, and rerun replacement behavior

@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="DataMigrator.csproj" />
+  <Folder Name="/tests/">
+    <Project Path="tests/DataMigrator.Tests/DataMigrator.Tests.csproj" />
+  </Folder>
+</Solution>

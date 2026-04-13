@@ -15,7 +15,11 @@ Core product rules:
 
 ### Completed
 
-- Created a standalone root-level `.NET 8` solution around [DataMigrator.csproj](C:\Projects\ATSPM-43-to-5-Data-Migration\DataMigrator.csproj).
+- Import-time metrics logged by `SpeedEventMigrationService` after each run: total elapsed time, hours processed, location reads, source events loaded, and compressed windows written.
+- Automated tests added for speed migration source-connection normalization (`BuildSourceConnectionString`) and rerun-safe key matching (`GetExistingLogsAsync`) in `SpeedEventMigrationServiceTests`.
+- Automated tests added for migration orchestration edge cases: all skip-flag combinations and failure propagation for both config and event phases.
+- Operator-facing troubleshooting documentation expanded to cover long-running speed imports, rerun replacement behavior, duplicate detection queries, source gap comparison, and upgrade command skip flags.
+- Created a standalone root-level `.NET 8` solution around [DataMigrator.csproj](DataMigrator.csproj).
 - Reduced the command surface to:
   - `transfer-config`
   - `transfer-events`
@@ -23,13 +27,13 @@ Core product rules:
   - `upgrade-to-5-2`
 - Removed unrelated `DatabaseInstaller` commands from the extracted tool.
 - Replaced source project coupling with NuGet package references.
-- Added a temporary local NuGet feed workaround through [nuget.config](C:\Projects\ATSPM-43-to-5-Data-Migration\nuget.config) and `local-packages` because the published UDOT package set is incomplete on the online feeds.
+- Added a temporary local NuGet feed workaround through [nuget.config](nuget.config) and `local-packages` because the published UDOT package set is incomplete on the online feeds.
 - Flattened the repo layout so the app lives at the repository root instead of under `src/`.
-- Added release automation scaffolding under [.github/workflows](C:\Projects\ATSPM-43-to-5-Data-Migration\.github\workflows) for:
+- Added release automation scaffolding under [.github/workflows](.github/workflows) for:
   - Windows executable packaging
   - container image publishing
-- Added documentation structure under [docs](C:\Projects\ATSPM-43-to-5-Data-Migration\docs).
-- Added starter test coverage under [tests/DataMigrator.Tests](C:\Projects\ATSPM-43-to-5-Data-Migration\tests\DataMigrator.Tests).
+- Added documentation structure under [docs](docs).
+- Added starter test coverage under [tests/DataMigrator.Tests](tests/DataMigrator.Tests).
 
 ### Verified
 
@@ -43,11 +47,7 @@ Core product rules:
 - Live target config validation confirmed current active location `7365` has both a signal-controller device and a speed-sensor device attached.
 - Live target config validation confirmed current active location `5234` has both a signal-controller device and a speed-sensor device attached.
 - The `transfer-speed` command now honors `--locations` correctly.
-
-### In Progress
-
-- Speed migration now uses the same latest active location selection model as event migration so old data is resolved against the current migrated device assignments. This change is implemented in [SpeedEventMigrationService.cs](C:\Projects\ATSPM-43-to-5-Data-Migration\Services\SpeedEventMigrationService.cs), and it has now been live-validated for both first load and rerun-safe replacement for location `5234` for `2026-04-10 09:00:00` through `09:59:59`.
-- No local build or test blockers are currently known in the extracted tool.
+- Speed migration uses the same latest active location selection model as event migration so old data is resolved against the current migrated device assignments. Live-validated for both first load and rerun-safe replacement for location `5234` for `2026-04-10 09:00:00` through `09:59:59`.
 
 ## Important Fixes Made
 
@@ -163,25 +163,12 @@ This is why the repository currently depends on the local package feed workaroun
 
 ## Remaining Work
 
-### High Priority
-
-- Add targeted automated coverage around speed migration source-connection normalization and rerun replacement behavior so this live fix stays protected.
-- Confirm whether any additional narrow-slice live validation is still needed beyond the now-verified `5234` hour baseline.
-
-### Medium Priority
-
-- Improve operator-facing troubleshooting for long-running speed imports and duplicate/rerun handling.
-- Add targeted tests for migration orchestration edge cases beyond command and hosted-service coverage.
-- Confirm release workflows match the Open Source Transportation ATSPM release conventions end to end.
-
 ### Later
 
 - Remove the local NuGet feed workaround once missing UDOT packages are published to a shared online feed.
-- Consider adding import-time metrics or summaries for migrated counts by entity type and date range.
 
 ## Next Recommended Steps
 
 1. Add focused automated tests around `SpeedEventMigrationService` for source-connection normalization and rerun-safe replacement by `(LocationIdentifier, DeviceId, Start)`.
 2. If operators still see intermittent SQL Server variability in the field, capture the exact command line and compare it against the now-validated `5234` hour baseline before changing the query shape again.
-3. Commit the repo state as the current live-validated migration baseline.
 

@@ -1,0 +1,50 @@
+name: Publish Windows Executable
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version without the leading v
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Restore
+        run: dotnet restore ./DataMigrator.csproj
+      - name: Publish win-x64
+        run: dotnet publish ./DataMigrator.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:Version=${{ steps.version.outputs.version }} -o ./artifacts/win-x64
+      - name: Archive package
+        shell: bash
+        run: |
+          cd artifacts
+          zip -r ATSPM-43-to-5-Data-Migration-win-x64-${{ steps.version.outputs.version }}.zip ./win-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATSPM-43-to-5-Data-Migration-win-x64-${{ steps.version.outputs.version }}
+          path: artifacts/ATSPM-43-to-5-Data-Migration-win-x64-${{ steps.version.outputs.version }}.zip
+      - uses: softprops/action-gh-release@v2
+        if: github.event_name == 'release'
+        with:
+          files: artifacts/ATSPM-43-to-5-Data-Migration-win-x64-${{ steps.version.outputs.version }}.zip
