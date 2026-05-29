@@ -2,7 +2,7 @@
 
 ## Summary
 
-This repository is the extracted `.NET 8` migration utility for moving ATSPM 4.3 data into an ATSPM 5.2 environment.
+This repository is the extracted `.NET 8` migration utility for moving ATSPM 4.3 data into an ATSPM 5.3 environment.
 
 Core product rules:
 
@@ -27,7 +27,8 @@ Core product rules:
   - `upgrade-to-5-2`
 - Removed unrelated `DatabaseInstaller` commands from the extracted tool.
 - Replaced source project coupling with NuGet package references.
-- Added a temporary local NuGet feed workaround through [nuget.config](nuget.config) and `local-packages` because the published UDOT package set is incomplete on the online feeds.
+- Switched UDOT package references to the republished online `5.3.0-rc5` package set and removed the temporary local NuGet feed workaround.
+- Added PostgreSQL target schema migration handling for the republished UDOT package model, including the official `20260521163837_5_3` config migration bridge needed by the current package metadata.
 - Flattened the repo layout so the app lives at the repository root instead of under `src/`.
 - Added release automation scaffolding under [.github/workflows](.github/workflows) for:
   - Windows executable packaging
@@ -39,6 +40,7 @@ Core product rules:
 
 - Re-verified locally on 2026-04-13: `dotnet build .\DataMigrator.csproj -c Release` succeeds.
 - Re-verified locally on 2026-04-10: `dotnet test .\DataMigrator.slnx -c Release` passes with 17 tests.
+- Re-verified locally on 2026-05-29: `dotnet test .\DataMigrator.slnx -c Release` passes with 24 tests.
 - Configuration migration was run successfully against the configured PostgreSQL target with `transfer-config --delete`.
 - Device configuration descriptions were validated in PostgreSQL and did not collapse to the first description.
 - Active current locations, using the same repository-style selection logic as the app, now all have signal-controller devices after the config import fix.
@@ -148,27 +150,19 @@ Validated live against the configured source and target:
 
 ### Package Feed Validation
 
-The online feeds alone are not currently sufficient for clean restore.
+The online feeds now restore the UDOT package set through `Utah.Udot.Atspm` and `Utah.Udot.Atspm.Infrastructure` `5.3.0-rc5`.
 
-Missing online packages include:
+The local package feed workaround is no longer required.
 
-- `Utah.Udot.Atspm.Data`
-- `Utah.Udot.Atspm.MySqlDatabaseProvider`
-- `Utah.Udot.Atspm.OracleDatabaseProvider`
-- `Utah.Udot.Atspm.PostgreSQLDatabaseProvider`
-- `Utah.Udot.Atspm.SqlDatabaseProvider`
-- `Utah.Udot.Atspm.SqlLiteDatabaseProvider`
-
-This is why the repository currently depends on the local package feed workaround.
+For PostgreSQL targets, the migrator applies registered UDOT `ConfigContext` migrations and an idempotent bridge for the official `20260521163837_5_3` config migration before importing configuration data.
 
 ## Remaining Work
 
 ### Later
 
-- Remove the local NuGet feed workaround once missing UDOT packages are published to a shared online feed.
+- Re-run live migration validation when adopting future ATSPM package releases.
 
 ## Next Recommended Steps
 
 1. Add focused automated tests around `SpeedEventMigrationService` for source-connection normalization and rerun-safe replacement by `(LocationIdentifier, DeviceId, Start)`.
 2. If operators still see intermittent SQL Server variability in the field, capture the exact command line and compare it against the now-validated `5234` hour baseline before changing the query shape again.
-

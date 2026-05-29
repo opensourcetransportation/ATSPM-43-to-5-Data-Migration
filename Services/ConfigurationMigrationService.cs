@@ -23,6 +23,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Data;
 using System.Text.Json;
 using Utah.Udot.Atspm.Data;
 using Utah.Udot.Atspm.Data.Enums;
@@ -102,19 +103,12 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         {
             await SourcePreflightAsync(_config.Source, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            DeleteLocations();
-            cancellationToken.ThrowIfCancellationRequested();
-            DeleteRegions();
-            cancellationToken.ThrowIfCancellationRequested();
-            DeleteAreas();
-            cancellationToken.ThrowIfCancellationRequested();
-            DeleteJurisdictions();
-            cancellationToken.ThrowIfCancellationRequested();
-            DeleteDevices();
-            cancellationToken.ThrowIfCancellationRequested();
-            DeleteDevicesConfigurations();
-            cancellationToken.ThrowIfCancellationRequested();
-            DeleteProducts();
+        }
+
+        EnsureTargetSchemaCompatibility();
+        if (_config.Delete)
+        {
+            DeleteConfigurationData();
         }
 
         // If no source connection string is provided (typical in unit tests),
@@ -252,14 +246,14 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         foreach (var device in importedDevices)
         {
             device.DeviceConfiguration = speedDeviceConfiguration;
-            var location = _locationRepository.GetLatestVersionOfLocation(device.DeviceIdentifier);
-            if (location == null)
+            var locationId = GetLatestLocationId(device.DeviceIdentifier);
+            if (locationId == null)
             {
                 _logger.LogInformation($"Location not found for device {device.DeviceIdentifier}");
                 continue;
             }
 
-            device.LocationId = location.Id;
+            device.LocationId = locationId.Value;
             validDevices.Add(device);
         }
 
@@ -498,15 +492,15 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
                 continue;
             }
 
-            var location = _locationRepository.GetLatestVersionOfLocation(device.DeviceIdentifier);
-            if (location == null)
+            var locationId = GetLatestLocationId(device.DeviceIdentifier);
+            if (locationId == null)
             {
                 _logger.LogInformation($"Location not found for device {device.DeviceIdentifier}");
                 continue;
             }
 
             device.DeviceConfiguration = configuration;
-            device.LocationId = location.Id;
+            device.LocationId = locationId.Value;
             validDevices.Add(device);
         }
 
@@ -777,6 +771,202 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             throw;
         }
 
+    }
+
+    private void DeleteConfigurationData()
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var configContext = scope.ServiceProvider.GetRequiredService<ConfigContext>();
+
+        if (configContext.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            _logger.LogInformation("Deleting configuration data with PostgreSQL truncate");
+            configContext.Database.ExecuteSqlRaw("""
+                TRUNCATE TABLE
+                    public."RouteLocations",
+                    public."Routes",
+                    public."Devices",
+                    public."Detectors",
+                    public."Approaches",
+                    public."Locations",
+                    public."Areas",
+                    public."Jurisdictions",
+                    public."Regions",
+                    public."DeviceConfigurations",
+                    public."Products"
+                RESTART IDENTITY CASCADE;
+                """);
+            return;
+        }
+
+        DeleteLocations();
+        DeleteRegions();
+        DeleteAreas();
+        DeleteJurisdictions();
+        DeleteDevices();
+        DeleteDevicesConfigurations();
+        DeleteProducts();
+    }
+
+    private void EnsureTargetSchemaCompatibility()
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var configContext = scope.ServiceProvider.GetRequiredService<ConfigContext>();
+
+        if (configContext.Database.ProviderName != "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            return;
+        }
+
+        var pendingMigrations = configContext.Database.GetPendingMigrations().ToList();
+        if (pendingMigrations.Count > 0)
+        {
+            _logger.LogInformation(
+                "Applying {Count} pending PostgreSQL config migrations: {Migrations}",
+                pendingMigrations.Count,
+                string.Join(", ", pendingMigrations));
+            configContext.Database.Migrate();
+        }
+
+        ApplyPostgreSqlConfig53MigrationBridge(configContext);
+    }
+
+    private void ApplyPostgreSqlConfig53MigrationBridge(ConfigContext configContext)
+    {
+        _logger.LogInformation("Ensuring PostgreSQL config migration 20260521163837_5_3");
+        configContext.Database.ExecuteSqlRaw("""
+            DO $$
+            DECLARE
+                target_table text;
+                audit_tables text[] := ARRAY[
+                    'WatchDogIgnoreEvents',
+                    'UsageEntries',
+                    'Routes',
+                    'RouteLocations',
+                    'RouteDistances',
+                    'Regions',
+                    'Products',
+                    'MenuItems',
+                    'MeasureType',
+                    'MeasureOptions',
+                    'MeasureOptionPresets',
+                    'MeasureComments',
+                    'LocationTypes',
+                    'Locations',
+                    'Jurisdictions',
+                    'Faqs',
+                    'DirectionTypes',
+                    'Devices',
+                    'DeviceConfigurations',
+                    'Detectors',
+                    'DetectorComments',
+                    'DetectionTypes',
+                    'Areas',
+                    'Approaches'
+                ];
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM public."__EFMigrationsHistory"
+                    WHERE "MigrationId" = '20260521163837_5_3'
+                ) THEN
+                    FOREACH target_table IN ARRAY audit_tables LOOP
+                        IF EXISTS (
+                            SELECT 1
+                            FROM information_schema.columns
+                            WHERE table_schema = 'public'
+                                AND table_name = target_table
+                                AND column_name = 'Created'
+                                AND data_type = 'timestamp without time zone'
+                        ) THEN
+                            EXECUTE format(
+                                'ALTER TABLE public.%I ALTER COLUMN "Created" TYPE timestamp with time zone USING "Created" AT TIME ZONE ''UTC''',
+                                target_table);
+                        END IF;
+
+                        IF EXISTS (
+                            SELECT 1
+                            FROM information_schema.columns
+                            WHERE table_schema = 'public'
+                                AND table_name = target_table
+                                AND column_name = 'Modified'
+                                AND data_type = 'timestamp without time zone'
+                        ) THEN
+                            EXECUTE format(
+                                'ALTER TABLE public.%I ALTER COLUMN "Modified" TYPE timestamp with time zone USING "Modified" AT TIME ZONE ''UTC''',
+                                target_table);
+                        END IF;
+                    END LOOP;
+
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                            AND table_name = 'Approaches'
+                            AND column_name = 'TransitSignalPriorityNumber'
+                    ) THEN
+                        ALTER TABLE public."Approaches" ADD COLUMN "TransitSignalPriorityNumber" integer NULL;
+                    END IF;
+
+                    INSERT INTO public."__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+                    VALUES ('20260521163837_5_3', '8.0.22')
+                    ON CONFLICT ("MigrationId") DO NOTHING;
+                END IF;
+            END $$;
+            """);
+    }
+
+    private int? GetLatestLocationId(string locationIdentifier)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var configContext = scope.ServiceProvider.GetRequiredService<ConfigContext>();
+
+        if (configContext.Database.ProviderName != "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            return _locationRepository.GetLatestVersionOfLocation(locationIdentifier)?.Id;
+        }
+
+        var connection = configContext.Database.GetDbConnection();
+        var shouldCloseConnection = connection.State != ConnectionState.Open;
+        if (shouldCloseConnection)
+        {
+            connection.Open();
+        }
+
+        try
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT "Id"
+                FROM public."Locations"
+                WHERE "LocationIdentifier" = @locationIdentifier
+                    AND "VersionAction" <> @deleteVersionAction
+                ORDER BY "Start" DESC, "Id" DESC
+                LIMIT 1;
+                """;
+
+            var locationIdentifierParameter = command.CreateParameter();
+            locationIdentifierParameter.ParameterName = "@locationIdentifier";
+            locationIdentifierParameter.Value = locationIdentifier;
+            command.Parameters.Add(locationIdentifierParameter);
+
+            var deleteVersionActionParameter = command.CreateParameter();
+            deleteVersionActionParameter.ParameterName = "@deleteVersionAction";
+            deleteVersionActionParameter.Value = (int)LocationVersionActions.Delete;
+            command.Parameters.Add(deleteVersionActionParameter);
+
+            var result = command.ExecuteScalar();
+            return result == null || result == DBNull.Value
+                ? null
+                : Convert.ToInt32(result);
+        }
+        finally
+        {
+            if (shouldCloseConnection)
+            {
+                connection.Close();
+            }
+        }
     }
 
 
