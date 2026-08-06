@@ -16,19 +16,19 @@
     <UserSecretsId>c6d602c6-cbe9-4f51-84a9-05406d68c3cc</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.0" />
-    <PackageReference Include="Polly" Version="8.5.2" />
+    <PackageReference Include="Polly" Version="8.7.0" />
     <PackageReference Include="Polly.Contrib.WaitAndRetry" Version="1.1.1" />
-    <PackageReference Include="System.Data.SqlClient" Version="4.8.6" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.9.1" />
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
     <PackageReference Include="System.CommandLine.Hosting" Version="0.4.0-alpha.22272.1" />
-    <PackageReference Include="Utah.Udot.Atspm" Version="5.2.0" />
-    <PackageReference Include="Utah.Udot.Atspm.Infrastructure" Version="5.2.0" />
+    <PackageReference Include="Utah.Udot.Atspm" Version="5.3.1" />
+    <PackageReference Include="Utah.Udot.Atspm.Infrastructure" Version="5.3.1" />
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />

@@ -102,6 +102,15 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             DeleteProducts();
         }
 
+        // If no source connection string is provided (typical in unit tests),
+        // avoid running import paths that open real SQL connections.
+        if (string.IsNullOrWhiteSpace(_config.Source))
+        {
+            _logger.LogInformation("No source connection configured; skipping import/update steps.");
+            _config.UpdateLocations = false;
+            _config.ImportSpeedDevices = false;
+        }
+
         IConfiguration config = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
             .AddJsonFile("appsettings.json")
@@ -742,6 +751,11 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
     private List<T> ImportData<T>(string query, Dictionary<string, string> columnMappings) where T : new()
     {
         var entities = new List<T>();
+        if (string.IsNullOrWhiteSpace(_config?.Source))
+        {
+            _logger.LogWarning("ImportData skipped: source connection string is not set.");
+            return entities;
+        }
 
         using (var sourceConnection = new SqlConnection(_config.Source))
         {

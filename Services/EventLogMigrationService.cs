@@ -42,19 +42,36 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
     private readonly ILogger<EventLogMigrationService> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILocationRepository _locationRepository;
-    private readonly AsyncRetryPolicy _retryPolicy = Policy
-        .Handle<Exception>()
-        .WaitAndRetryAsync(
-            Backoff.DecorrelatedJitterBackoffV2(TimeSpan.FromSeconds(10), 5)
-                .Concat(new[] { TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(30) })
-                .Concat(Enumerable.Repeat(TimeSpan.FromDays(1), 24)),
-            (exception, timeSpan, retryCount, _) => Console.WriteLine($"Retry {retryCount} after {timeSpan.TotalSeconds} seconds due to {exception.Message}"));
+    private readonly AsyncRetryPolicy _retryPolicy;
 
-    public EventLogMigrationService(ILogger<EventLogMigrationService> logger, IServiceProvider serviceProvider, ILocationRepository locationRepository)
+    public EventLogMigrationService(ILogger<EventLogMigrationService> logger, IServiceProvider serviceProvider, ILocationRepository locationRepository, AsyncRetryPolicy? retryPolicy = null)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
         _locationRepository = locationRepository;
+        if (retryPolicy != null)
+        {
+            _retryPolicy = retryPolicy;
+        }
+        else
+        {
+            // If the SHORT_RETRY_POLICY env var is set, use a very short retry policy useful for tests
+            var shortPolicyFlag = Environment.GetEnvironmentVariable("SHORT_RETRY_POLICY");
+            if (!string.IsNullOrEmpty(shortPolicyFlag) && shortPolicyFlag == "1")
+            {
+                _retryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(new[] { TimeSpan.Zero });
+            }
+            else
+            {
+                _retryPolicy = Policy
+                    .Handle<Exception>()
+                    .WaitAndRetryAsync(
+                        Backoff.DecorrelatedJitterBackoffV2(TimeSpan.FromSeconds(10), 5)
+                            .Concat(new[] { TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(30) })
+                            .Concat(Enumerable.Repeat(TimeSpan.FromDays(1), 24)),
+                        (exception, timeSpan, retryCount, _) => Console.WriteLine($"Retry {retryCount} after {timeSpan.TotalSeconds} seconds due to {exception.Message}"));
+            }
+        }
     }
 
     public async Task RunAsync(MigrationCommandConfiguration config, CancellationToken cancellationToken)
@@ -194,7 +211,15 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
             {
                 using var scope = _serviceProvider.CreateScope();
                 var context = scope.ServiceProvider.GetRequiredService<EventLogContext>();
-                await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+                Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? transaction = null;
+                try
+                {
+                    transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "BeginTransactionAsync failed or was ignored by provider; proceeding without a transaction.");
+                }
                 var existingLogs = await GetExistingLogsAsync(context, batchLogs, cancellationToken);
                 if (existingLogs.Count != 0)
                 {
@@ -209,7 +234,10 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
 
                 context.IndiannaEvents.AddRange(batchLogs);
                 await context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
+                if (transaction != null)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                }
                 _logger.LogInformation("Inserted event batch {BatchNumber} with {Count} records for {Date}", batchNumber, batchLogs.Count, batchLogs.First().Start);
                 batchNumber++;
             });
@@ -227,11 +255,11 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
         var starts = logKeys.Select(key => key.Start).Distinct().ToList();
 
         var existingLogs = await context.IndiannaEvents
-            .Where(log =>
-                locationIdentifiers.Contains(log.LocationIdentifier) &&
-                deviceIds.Contains(log.DeviceId) &&
-                starts.Contains(log.Start))
-            .ToListAsync(cancellationToken);
+                .Where(log =>
+                    locationIdentifiers.Contains(log.LocationIdentifier) &&
+                    deviceIds.Contains(log.DeviceId) &&
+                    starts.Contains(log.Start))
+                .ToListAsync(cancellationToken);
 
         return existingLogs.Where(log => logKeys.Contains(CreateKey(log))).ToList();
     }

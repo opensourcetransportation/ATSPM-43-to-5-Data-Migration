@@ -1,0 +1,7 @@
+IndiannaEvents property type: Microsoft.EntityFrameworkCore.DbSet`1[Utah.Udot.Atspm.Data.Models.CompressedEventLogs`1[Utah.Udot.Atspm.Data.Models.EventLogModels.IndianaEvent]]
+Generic arg: Utah.Udot.Atspm.Data.Models.CompressedEventLogs`1[[Utah.Udot.Atspm.Data.Models.EventLogModels.IndianaEvent, Utah.Udot.Atspm.Data, Version=5.3.1.0, Culture=neutral, PublicKeyToken=null]]
+EF model entity types:
+Entity: Utah.Udot.Atspm.Data.Models.CompressedEventLogBase, ClrType: Utah.Udot.Atspm.Data.Models.CompressedEventLogBase
+Entity: Utah.Udot.Atspm.Data.Models.CompressedEventLogs<Utah.Udot.Atspm.Data.Models.EventLogModels.IndianaEvent>, ClrType: Utah.Udot.Atspm.Data.Models.CompressedEventLogs`1[Utah.Udot.Atspm.Data.Models.EventLogModels.IndianaEvent]
+Entity: Utah.Udot.Atspm.Data.Models.CompressedEventLogs<Utah.Udot.Atspm.Data.Models.EventLogModels.PedestrianCounter>, ClrType: Utah.Udot.Atspm.Data.Models.CompressedEventLogs`1[Utah.Udot.Atspm.Data.Models.EventLogModels.PedestrianCounter]
+Entity: Utah.Udot.Atspm.Data.Models.CompressedEventLogs<Utah.Udot.Atspm.Data.Models.EventLogModels.SpeedEvent>, ClrType: Utah.Udot.Atspm.Data.Models.CompressedEventLogs`1[Utah.Udot.Atspm.Data.Models.EventLogModels.SpeedEvent]

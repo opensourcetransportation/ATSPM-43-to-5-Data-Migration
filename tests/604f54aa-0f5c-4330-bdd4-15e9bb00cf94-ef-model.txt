@@ -1,0 +1,5 @@
+EF model entity types in test DB:
+Entity: Utah.Udot.Atspm.Data.Models.CompressedEventLogBase, ClrType: Utah.Udot.Atspm.Data.Models.CompressedEventLogBase, Table: CompressedEventLogBase
+Entity: Utah.Udot.Atspm.Data.Models.CompressedEventLogs<Utah.Udot.Atspm.Data.Models.EventLogModels.IndianaEvent>, ClrType: Utah.Udot.Atspm.Data.Models.CompressedEventLogs`1[Utah.Udot.Atspm.Data.Models.EventLogModels.IndianaEvent], Table: CompressedEventLogBase
+Entity: Utah.Udot.Atspm.Data.Models.CompressedEventLogs<Utah.Udot.Atspm.Data.Models.EventLogModels.PedestrianCounter>, ClrType: Utah.Udot.Atspm.Data.Models.CompressedEventLogs`1[Utah.Udot.Atspm.Data.Models.EventLogModels.PedestrianCounter], Table: CompressedEventLogBase
+Entity: Utah.Udot.Atspm.Data.Models.CompressedEventLogs<Utah.Udot.Atspm.Data.Models.EventLogModels.SpeedEvent>, ClrType: Utah.Udot.Atspm.Data.Models.CompressedEventLogs`1[Utah.Udot.Atspm.Data.Models.EventLogModels.SpeedEvent], Table: CompressedEventLogBase
