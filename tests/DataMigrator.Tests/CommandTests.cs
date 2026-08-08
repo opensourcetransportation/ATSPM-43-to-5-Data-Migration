@@ -17,6 +17,9 @@
 
 using DataMigrator.Commands;
 using System.CommandLine.Binding;
+using System.CommandLine.Builder;
+using System.CommandLine.IO;
+using System.CommandLine.Parsing;
 using Xunit;
 
 namespace DataMigrator.Tests;
@@ -85,6 +88,26 @@ public sealed class CommandTests
         Assert.True(options.SkipConfig);
         Assert.True(options.SkipEvents);
         Assert.True(options.SkipSpeed);
+    }
+
+    [Fact]
+    public async Task Parser_MissingRequiredOptionsReturnsNonZeroExitCode()
+    {
+        var parser = new CommandLineBuilder(new DataMigratorCommands()).UseDefaults().Build();
+
+        var exitCode = await parser.InvokeAsync(["transfer-events"], new TestConsole());
+
+        Assert.NotEqual(0, exitCode);
+    }
+
+    [Fact]
+    public async Task Parser_HelpReturnsZeroExitCode()
+    {
+        var parser = new CommandLineBuilder(new DataMigratorCommands()).UseDefaults().Build();
+
+        var exitCode = await parser.InvokeAsync(["--help"], new TestConsole());
+
+        Assert.Equal(0, exitCode);
     }
 }
 

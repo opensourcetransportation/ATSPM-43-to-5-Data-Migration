@@ -31,6 +31,14 @@ using Utah.Udot.Atspm.Repositories.ConfigurationRepositories;
 
 namespace DataMigrator.Services;
 
+internal delegate Task SpeedLogLoader(
+    DateTime startUtc,
+    DateTime endUtc,
+    string sourceConnectionString,
+    ConcurrentBag<CompressedEventLogs<SpeedEvent>> archiveLogs,
+    Location location,
+    CancellationToken cancellationToken);
+
 public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
 {
     private readonly record struct LogKey(string LocationIdentifier, int DeviceId, DateTime Start);
@@ -39,16 +47,32 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
     private readonly ILogger<SpeedEventMigrationService> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILocationRepository _locationRepository;
+    private readonly SpeedLogLoader _loadLogsAsync;
+    private readonly Func<TimeSpan, CancellationToken, Task> _delayAsync;
 
     public SpeedEventMigrationService(ILogger<SpeedEventMigrationService> logger, IServiceProvider serviceProvider, ILocationRepository locationRepository)
+        : this(logger, serviceProvider, locationRepository, null, null)
+    {
+    }
+
+    internal SpeedEventMigrationService(
+        ILogger<SpeedEventMigrationService> logger,
+        IServiceProvider serviceProvider,
+        ILocationRepository locationRepository,
+        SpeedLogLoader? loadLogsAsync,
+        Func<TimeSpan, CancellationToken, Task>? delayAsync)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
         _locationRepository = locationRepository;
+        _loadLogsAsync = loadLogsAsync ?? GetLogsAsync;
+        _delayAsync = delayAsync ?? Task.Delay;
     }
 
     public async Task RunAsync(MigrationCommandConfiguration config, CancellationToken cancellationToken)
     {
+        ValidateConfiguration(config);
+        cancellationToken.ThrowIfCancellationRequested();
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(config.Start, config.End, treatDateOnlyEndAsWholeDay: true);
         var processedHours = 0;
@@ -103,13 +127,25 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
         {
             try
             {
-                await GetLogsAsync(startUtc, endUtc, sourceConnectionString, archiveLogs, location, cancellationToken);
+                await _loadLogsAsync(startUtc, endUtc, sourceConnectionString, archiveLogs, location, cancellationToken);
                 return;
             }
             catch (Exception ex) when (attempt < 3)
             {
-                _logger.LogWarning(ex, "Attempt {Attempt} failed for {Location}. Retrying.", attempt, location.LocationIdentifier);
-                await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+                _logger.LogWarning(
+                    "Attempt {Attempt} failed for {Location}. Retrying. {Error}",
+                    attempt,
+                    location.LocationIdentifier,
+                    SensitiveDataRedactor.Redact(ex.Message));
+                await _delayAsync(TimeSpan.FromSeconds(30), cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(SensitiveDataRedactor.Redact(ex.Message));
             }
         }
     }
@@ -149,9 +185,16 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
             await transaction.CommitAsync(cancellationToken);
             _logger.LogInformation("Flushed {Count} compressed speed-event records.", toInsert.Count);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Bulk speed-event flush failed. Falling back to individual inserts.");
+            _logger.LogError(
+                "Bulk speed-event flush failed. Falling back to individual inserts. {Error}",
+                SensitiveDataRedactor.Redact(ex.Message));
+            var fallbackFailures = new List<Exception>();
             foreach (var log in toInsert)
             {
                 try
@@ -175,11 +218,41 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
                     await context.SaveChangesAsync(cancellationToken);
                     await transaction.CommitAsync(cancellationToken);
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception itemEx)
                 {
-                    _logger.LogError(itemEx, "Failed to insert speed log for {Location} between {Start} and {End}", log.LocationIdentifier, log.Start, log.End);
+                    _logger.LogError(
+                        "Failed to insert speed log for {Location} between {Start} and {End}. {Error}",
+                        log.LocationIdentifier,
+                        log.Start,
+                        log.End,
+                        SensitiveDataRedactor.Redact(itemEx.Message));
+                    fallbackFailures.Add(new InvalidOperationException(SensitiveDataRedactor.Redact(itemEx.Message)));
                 }
             }
+
+            if (fallbackFailures.Count != 0)
+            {
+                throw new AggregateException(
+                    $"Failed to insert {fallbackFailures.Count} of {toInsert.Count} speed-event window(s) during fallback.",
+                    fallbackFailures);
+            }
+        }
+    }
+
+    private static void ValidateConfiguration(MigrationCommandConfiguration config)
+    {
+        if (string.IsNullOrWhiteSpace(config.Source))
+        {
+            throw new ArgumentException("A source connection string is required.", nameof(config));
+        }
+
+        if (config.End < config.Start)
+        {
+            throw new ArgumentOutOfRangeException(nameof(config), "The migration end must not be before the start.");
         }
     }
 

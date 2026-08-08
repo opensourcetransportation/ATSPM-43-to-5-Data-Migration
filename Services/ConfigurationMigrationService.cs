@@ -50,6 +50,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
     private readonly IServiceProvider _serviceProvider;
     private readonly IDeviceRepository _deviceRepository;
     private TransferConfigCommandConfiguration _config = new();
+    internal Func<string, CancellationToken, Task> SourcePreflightAsync { get; set; } = ValidateSourceAsync;
 
     public ConfigurationMigrationService(
         ILogger<ConfigurationMigrationService> logger,
@@ -90,15 +91,29 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
 
     public async Task RunAsync(TransferConfigCommandConfiguration options, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         _config = options;
+        if (_config.Delete && string.IsNullOrWhiteSpace(_config.Source))
+        {
+            throw new InvalidOperationException("A source connection string is required before target configuration can be deleted.");
+        }
+
         if (_config.Delete)
         {
+            await SourcePreflightAsync(_config.Source, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             DeleteLocations();
+            cancellationToken.ThrowIfCancellationRequested();
             DeleteRegions();
+            cancellationToken.ThrowIfCancellationRequested();
             DeleteAreas();
+            cancellationToken.ThrowIfCancellationRequested();
             DeleteJurisdictions();
+            cancellationToken.ThrowIfCancellationRequested();
             DeleteDevices();
+            cancellationToken.ThrowIfCancellationRequested();
             DeleteDevicesConfigurations();
+            cancellationToken.ThrowIfCancellationRequested();
             DeleteProducts();
         }
 
@@ -138,6 +153,23 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         {
             ImportSpeedDevices(queries, columnMappings);
             ResetSequences();
+        }
+    }
+
+    private static async Task ValidateSourceAsync(string sourceConnectionString, CancellationToken cancellationToken)
+    {
+        using var connection = new SqlConnection(sourceConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        using var command = new SqlCommand(
+            "SELECT CASE WHEN OBJECT_ID(N'dbo.Signals', N'U') IS NOT NULL THEN 1 ELSE 0 END",
+            connection)
+        {
+            CommandTimeout = 30
+        };
+        var hasSignalsTable = Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)) == 1;
+        if (!hasSignalsTable)
+        {
+            throw new InvalidOperationException("The source database does not contain the required dbo.Signals table.");
         }
     }
 

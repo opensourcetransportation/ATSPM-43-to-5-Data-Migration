@@ -36,6 +36,9 @@
     <None Remove="tests\**\*" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="DataMigrator.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
