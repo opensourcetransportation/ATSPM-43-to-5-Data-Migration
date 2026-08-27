@@ -127,3 +127,7 @@ dotnet run --project . -- upgrade-to-5 `
 ```
 
 If a phase fails, the command stops and returns an error; later phases do not run. Completed event and speed windows can be safely retried using the same boundaries.
+
+## Reusable Integration Test
+
+Run [`scripts/integration-test.ps1`](../scripts/integration-test.ps1) against a disposable Docker target to exercise all commands with a one-hour source slice and verify persisted rows and idempotency. See [Integration Testing](integration-testing.md) for prerequisites, parameters, expected target changes, and the faster rerun mode.

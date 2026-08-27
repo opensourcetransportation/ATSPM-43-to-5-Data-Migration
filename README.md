@@ -95,5 +95,6 @@ Use `--skip-config`, `--skip-events`, or `--skip-speed` to omit a phase. Run `do
 - [Configuration and permissions](docs/configuration.md)
 - [Commands and option reference](docs/usage.md)
 - [Production upgrade and validation guide](docs/upgrade-guide.md)
+- [Reusable integration test](docs/integration-testing.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Implementation history and design notes](docs/design/data-migrator-extraction-plan.md)
