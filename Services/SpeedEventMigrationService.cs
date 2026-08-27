@@ -74,20 +74,19 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
         ValidateConfiguration(config);
         cancellationToken.ThrowIfCancellationRequested();
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(config.Start, config.End, treatDateOnlyEndAsWholeDay: true);
+        var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(config.Start, config.End);
         var processedHours = 0;
-        var totalLocationReads = 0;
+        var locations = LoadCurrentLocations(config.Locations);
+        var totalLocationReads = locations.Count;
         var totalCompressedWindows = 0;
         var totalSourceEvents = 0;
+
+        _logger.LogInformation("Loaded {Count} speed-migration locations.", locations.Count);
 
         foreach (var (periodStart, periodEnd) in MigrationDateRange.EnumerateHourlyWindows(config.Start, endExclusive))
         {
             processedHours++;
             _logger.LogInformation("Processing speed events from {Start} to {End}", periodStart, periodEnd);
-
-            var locations = LoadCurrentLocations(config.Locations);
-            totalLocationReads += locations.Count;
-            _logger.LogInformation("Loaded {Count} speed-migration locations for the current window.", locations.Count);
 
             var archiveLogs = new ConcurrentBag<CompressedEventLogs<SpeedEvent>>();
             var locationBatches = locations.Select((location, index) => new { location, index }).GroupBy(x => x.index / 10).Select(g => g.Select(x => x.location).ToList());
@@ -130,6 +129,10 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
                 await _loadLogsAsync(startUtc, endUtc, sourceConnectionString, archiveLogs, location, cancellationToken);
                 return;
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex) when (attempt < 3)
             {
                 _logger.LogWarning(
@@ -139,13 +142,9 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
                     SensitiveDataRedactor.Redact(ex.Message));
                 await _delayAsync(TimeSpan.FromSeconds(30), cancellationToken);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (Exception)
             {
                 throw;
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException(SensitiveDataRedactor.Redact(ex.Message));
             }
         }
     }
@@ -214,7 +213,7 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
                         await context.SaveChangesAsync(cancellationToken);
                     }
 
-                    context.CompressedEvents.Add(log);
+                    context.SpeedEvents.Add(log);
                     await context.SaveChangesAsync(cancellationToken);
                     await transaction.CommitAsync(cancellationToken);
                 }
@@ -414,7 +413,7 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
 
         return $@"
                                 SELECT DISTINCT DetectorID, MPH, KPH, Timestamp
-                                    FROM MOE.dbo.Speed_Events WITH (INDEX(ByTimestampByDetID))
+                                    FROM [dbo].[Speed_Events]
                                  WHERE Timestamp >= @startUtc
                                      AND Timestamp <  @endUtc
                                      AND DetectorID IN ({detectorParameters})

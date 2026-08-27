@@ -16,6 +16,7 @@
 #endregion
 
 using DataMigrator.Commands;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
@@ -23,15 +24,32 @@ namespace DataMigrator.Services;
 
 public sealed class TransferSpeedEventsHostedService : IHostedService
 {
-    private readonly ISpeedEventMigrationService _service;
+    private readonly IServiceScopeFactory? _scopeFactory;
+    private readonly ISpeedEventMigrationService? _service;
     private readonly MigrationCommandConfiguration _options;
 
-    public TransferSpeedEventsHostedService(ISpeedEventMigrationService service, IOptions<MigrationCommandConfiguration> options)
+    public TransferSpeedEventsHostedService(IServiceScopeFactory scopeFactory, IOptions<MigrationCommandConfiguration> options)
+    {
+        _scopeFactory = scopeFactory;
+        _options = options.Value;
+    }
+
+    internal TransferSpeedEventsHostedService(ISpeedEventMigrationService service, IOptions<MigrationCommandConfiguration> options)
     {
         _service = service;
         _options = options.Value;
     }
 
-    public Task StartAsync(CancellationToken cancellationToken) => _service.RunAsync(_options, cancellationToken);
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        if (_service != null)
+        {
+            await _service.RunAsync(_options, cancellationToken);
+            return;
+        }
+
+        using var scope = _scopeFactory!.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ISpeedEventMigrationService>().RunAsync(_options, cancellationToken);
+    }
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

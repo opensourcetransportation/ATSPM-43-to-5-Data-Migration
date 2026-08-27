@@ -44,11 +44,11 @@ public sealed class UpgradeTo5Command : Command, ICommandOption<UpgradeTo5Comman
 
     public Option<string> SourceOption { get; } = new("--source", "Connection string for the ATSPM 4.3 SQL Server source") { IsRequired = true };
     public Option<DateTime> StartOption { get; } = new("--start", "Start date/time for event and speed migration") { IsRequired = true };
-    public Option<DateTime> EndOption { get; } = new("--end", "Inclusive end date/time; use 23:59:59 to include a whole event end day") { IsRequired = true };
+    public Option<DateTime> EndOption { get; } = new("--end", "Inclusive end; a date-only value includes the whole end day") { IsRequired = true };
     public Option<bool> DeleteOption { get; } = new("--delete", "Delete target configuration data before importing");
     public Option<bool> UpdateLocationsOption { get; } = new("--update-locations", () => true, "Import configuration and location data into the target (enabled by default)");
     public Option<bool> ImportSpeedDevicesOption { get; } = new("--update-speed", () => true, "Import speed-device configuration, not speed events (enabled by default)");
-    public Option<int?> BatchOption { get; } = new("--batch", "Batch size for inserting compressed event log records") { IsRequired = false };
+    public Option<int?> BatchOption { get; } = new("--batch", "Compressed-window insert batch size (maximum 600)") { IsRequired = false };
     public Option<int?> DeviceOption { get; } = new("--device", "Limit event location selection to one ATSPM DeviceTypes integer; normally omit") { IsRequired = false };
     public Option<string> LocationsOption { get; } = new("--locations", "Comma-separated list of location identifiers") { IsRequired = false };
     public Option<bool> SkipConfigOption { get; } = new("--skip-config", "Skip configuration migration");
@@ -79,9 +79,9 @@ public sealed class UpgradeTo5Command : Command, ICommandOption<UpgradeTo5Comman
         services.AddSingleton(binder);
         services.AddSingleton(sp => (UpgradeTo5CommandConfiguration)binder.CreateInstance(host.GetInvocationContext().BindingContext)!);
         services.AddSingleton<Microsoft.Extensions.Options.IOptions<UpgradeTo5CommandConfiguration>>(sp => Microsoft.Extensions.Options.Options.Create(sp.GetRequiredService<UpgradeTo5CommandConfiguration>()));
-        services.AddSingleton<IConfigurationMigrationService, ConfigurationMigrationService>();
-        services.AddSingleton<IEventLogMigrationService, EventLogMigrationService>();
-        services.AddSingleton<ISpeedEventMigrationService, SpeedEventMigrationService>();
+        services.AddScoped<IConfigurationMigrationService, ConfigurationMigrationService>();
+        services.AddScoped<IEventLogMigrationService, EventLogMigrationService>();
+        services.AddScoped<ISpeedEventMigrationService, SpeedEventMigrationService>();
         services.AddHostedService<UpgradeTo5HostedService>();
     }
 }
@@ -101,4 +101,3 @@ public sealed class UpgradeTo5CommandConfiguration
     public bool SkipEvents { get; set; }
     public bool SkipSpeed { get; set; }
 }
-

@@ -52,6 +52,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
     private readonly IRouteLocationsRepository _routeLocationsRepository;
     private readonly IServiceProvider _serviceProvider;
     private readonly IDeviceRepository _deviceRepository;
+    private readonly IConfiguration _applicationConfiguration;
     private TransferConfigCommandConfiguration _config = new();
     internal Func<string, CancellationToken, Task> SourcePreflightAsync { get; set; } = ValidateSourceAsync;
 
@@ -71,7 +72,8 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         IMeasureTypeRepository measureTypeRepository,
         IRouteRepository routeRepository,
         IRouteLocationsRepository routeLocationsRepository,
-        IServiceProvider serviceProvider
+        IServiceProvider serviceProvider,
+        IConfiguration? applicationConfiguration = null
         )
     {
         _logger = logger;
@@ -90,6 +92,10 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         _routeLocationsRepository = routeLocationsRepository;
         _serviceProvider = serviceProvider;
         _deviceRepository = deviceRepository;
+        _applicationConfiguration = applicationConfiguration ?? new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false)
+            .Build();
     }
 
     public async Task RunAsync(TransferConfigCommandConfiguration options, CancellationToken cancellationToken)
@@ -122,13 +128,8 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             _config.ImportSpeedDevices = false;
         }
 
-        IConfiguration config = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("appsettings.json")
-            .Build();
-
-        Dictionary<string, string> queries = GetLocationQueries(config);
-        var columnMappings = GetColumnMappings(config);
+        Dictionary<string, string> queries = GetLocationQueries(_applicationConfiguration);
+        var columnMappings = GetColumnMappings(_applicationConfiguration);
         if (_config.UpdateLocations)
         {
             SetDetectionTypeMesureType();
@@ -178,7 +179,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         var databaseProvider = configContext.Database.ProviderName;
         if (databaseProvider != "Npgsql.EntityFrameworkCore.PostgreSQL")
         {
-            Console.WriteLine("Skipping sequence reset: Database provider is not PostgreSQL.");
+            _logger.LogInformation("Skipping sequence reset: database provider is not PostgreSQL");
             return;
         }
 
@@ -207,7 +208,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
 
             configContext.Database.ExecuteSqlRaw(query);
 
-            Console.WriteLine($"Sequence {sequence} reset successfully.");
+            _logger.LogInformation("Sequence {Sequence} reset successfully", sequence);
         }
     }
 
@@ -233,11 +234,11 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
                 Description = "Speed",
                 Protocol = TransportProtocols.Unknown,
                 ConnectionTimeout = 2000,
-                Path = "Unkown",
+                Path = "Unknown",
                 OperationTimeout = 2000,
                 Port = 0,
                 UserName = "Unknown",
-                Password = "Unkown",
+                Password = "Unknown",
                 ProductId = _productRepository.GetList().First(p => p.Manufacturer == "Wavetronix").Id
             });
         }
@@ -279,6 +280,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
                 .AsEnumerable()
                 .GroupBy(d => d.DeviceIdentifier, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+            var newDevices = new List<Device>();
 
             foreach (var device in validDevices)
             {
@@ -298,14 +300,19 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
                     }
                     else
                     {
-                        _deviceRepository.Add(device);
-                        _logger.LogInformation($"Speed Device {device.DeviceIdentifier} Imported");
+                        newDevices.Add(device);
                     }
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error importing speed device {DeviceIdentifier}", device.DeviceIdentifier);
                 }
+            }
+
+            if (newDevices.Count != 0)
+            {
+                _deviceRepository.AddRange(newDevices);
+                _logger.LogInformation("Imported {Count} new speed devices", newDevices.Count);
             }
         }
     }
@@ -462,18 +469,18 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         {
             var approachIds = _approachRepository.GetList().Select(a => a.Id).ToList();
             var newApproaches = approaches.Where(a => !approachIds.Contains(a.Id)).ToList();
-            foreach (var approach in newApproaches)
+            if (newApproaches.Count != 0)
             {
                 try
                 {
-                    _approachRepository.Add(approach);
-                    _logger.LogInformation($"Approach {approach.Id} Imported");
+                    _approachRepository.AddRange(newApproaches);
+                    _logger.LogInformation("Imported {Count} new approaches", newApproaches.Count);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error importing approach {ApproachId}", approach.Id);
+                    _logger.LogError(ex, "Error importing {Count} new approaches", newApproaches.Count);
+                    throw;
                 }
-
             }
         }
     }
@@ -518,6 +525,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             .AsEnumerable()
             .GroupBy(d => d.DeviceIdentifier, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var newDevices = new List<Device>();
 
         foreach (var device in validDevices)
         {
@@ -536,9 +544,14 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             }
             else
             {
-                _deviceRepository.Add(device);
-                _logger.LogInformation($"Device {device.DeviceIdentifier} Imported");
+                newDevices.Add(device);
             }
+        }
+
+        if (newDevices.Count != 0)
+        {
+            _deviceRepository.AddRange(newDevices);
+            _logger.LogInformation("Imported {Count} new controller devices", newDevices.Count);
         }
     }
 
@@ -564,28 +577,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             for (int i = 0; i < detectors.Count; i += batchSize)
             {
                 var batch = detectors.Skip(i).Take(batchSize).ToList();
-                foreach (var detectionType in detectionTypes)
-                {
-
-                    if (detectionType.Id == DetectionTypes.B)
-                    {
-                        foreach (var detector in batch)
-                        {
-                            detectionType.Detectors.Add(detector);
-                        }
-                    }
-                    else
-                    {
-                        var detectorIds = detectionTypeDetectors
-                        .Where(d => d.DetectionTypesId == (int)detectionType.Id)
-                        .Select(d => d.DetectorsId)
-                        .ToList();
-                        foreach (var detector in batch.Where(d => detectorIds.Contains(d.Id)))
-                        {
-                            detectionType.Detectors.Add(detector);
-                        }
-                    }
-                }
+                WireDetectionTypes(batch, detectionTypes, detectionTypeDetectors);
                 _detectorRepository.AddRange(batch);
                 _logger.LogInformation($"Processed batch of {batch.Count} detectors");
             }
@@ -596,17 +588,40 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         {
             var detectorIds = _detectorRepository.GetList().Select(d => d.Id).ToList();
             var newDetectors = detectors.Where(d => !detectorIds.Contains(d.Id)).ToList();
-            foreach (var detector in newDetectors)
+            if (newDetectors.Count != 0)
             {
                 try
                 {
-                    _detectorRepository.Add(detector);
-                    _logger.LogInformation($"Detector {detector.DectectorIdentifier} Imported");
+                    WireDetectionTypes(newDetectors, detectionTypes, detectionTypeDetectors);
+                    _detectorRepository.AddRange(newDetectors);
+                    _logger.LogInformation("Imported {Count} new detectors with detection-type mappings", newDetectors.Count);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error importing detector {DetectorIdentifier}", detector.DectectorIdentifier);
+                    _logger.LogError(ex, "Error importing {Count} new detectors", newDetectors.Count);
+                    throw;
                 }
+            }
+        }
+    }
+
+    private static void WireDetectionTypes(
+        IReadOnlyCollection<Detector> detectors,
+        IReadOnlyCollection<DetectionType> detectionTypes,
+        IReadOnlyCollection<DetectionTypeDetector> detectionTypeDetectors)
+    {
+        foreach (var detectionType in detectionTypes)
+        {
+            var detectorIds = detectionType.Id == DetectionTypes.B
+                ? null
+                : detectionTypeDetectors
+                    .Where(mapping => mapping.DetectionTypesId == (int)detectionType.Id)
+                    .Select(mapping => mapping.DetectorsId)
+                    .ToHashSet();
+
+            foreach (var detector in detectors.Where(detector => detectorIds == null || detectorIds.Contains(detector.Id)))
+            {
+                detectionType.Detectors.Add(detector);
             }
         }
     }
@@ -651,16 +666,17 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         {
             var locationIds = _locationRepository.GetList().Select(l => l.Id).ToList();
             var newLocations = locations.Where(l => !locationIds.Contains(l.Id)).ToList();
-            foreach (var location in newLocations)
+            if (newLocations.Count != 0)
             {
                 try
                 {
-                    _locationRepository.Add(location);
-                    _logger.LogInformation($"Location {location.LocationIdentifier} Imported");
+                    _locationRepository.AddRange(newLocations);
+                    _logger.LogInformation("Imported {Count} new locations", newLocations.Count);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error importing location {LocationIdentifier}", location.LocationIdentifier);
+                    _logger.LogError(ex, "Error importing {Count} new locations", newLocations.Count);
+                    throw;
                 }
             }
         }
@@ -779,35 +795,24 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
     {
         using var scope = _serviceProvider.CreateScope();
         var configContext = scope.ServiceProvider.GetRequiredService<ConfigContext>();
+        using var transaction = configContext.Database.IsRelational()
+            ? configContext.Database.BeginTransaction()
+            : null;
 
-        if (configContext.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
-        {
-            _logger.LogInformation("Deleting configuration data with PostgreSQL truncate");
-            configContext.Database.ExecuteSqlRaw("""
-                TRUNCATE TABLE
-                    public."RouteLocations",
-                    public."Routes",
-                    public."Devices",
-                    public."Detectors",
-                    public."Approaches",
-                    public."Locations",
-                    public."Areas",
-                    public."Jurisdictions",
-                    public."Regions",
-                    public."DeviceConfigurations",
-                    public."Products"
-                RESTART IDENTITY CASCADE;
-                """);
-            return;
-        }
-
-        DeleteLocations();
-        DeleteRegions();
-        DeleteAreas();
-        DeleteJurisdictions();
-        DeleteDevices();
-        DeleteDevicesConfigurations();
-        DeleteProducts();
+        _logger.LogInformation("Deleting the bounded target configuration set");
+        configContext.RemoveRange(configContext.Set<RouteLocation>());
+        configContext.RemoveRange(configContext.Set<Route>());
+        configContext.RemoveRange(configContext.Set<Device>());
+        configContext.RemoveRange(configContext.Set<Detector>());
+        configContext.RemoveRange(configContext.Set<Approach>());
+        configContext.RemoveRange(configContext.Set<Location>());
+        configContext.RemoveRange(configContext.Set<Area>());
+        configContext.RemoveRange(configContext.Set<Jurisdiction>());
+        configContext.RemoveRange(configContext.Set<Region>());
+        configContext.RemoveRange(configContext.Set<DeviceConfiguration>());
+        configContext.RemoveRange(configContext.Set<Product>());
+        configContext.SaveChanges();
+        transaction?.Commit();
     }
 
     private void EnsureTargetSchemaCompatibility()
@@ -867,53 +872,47 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
                     'Approaches'
                 ];
             BEGIN
-                IF NOT EXISTS (
-                    SELECT 1
-                    FROM public."__EFMigrationsHistory"
-                    WHERE "MigrationId" = '20260521163837_5_3'
-                ) THEN
-                    FOREACH target_table IN ARRAY audit_tables LOOP
-                        IF EXISTS (
-                            SELECT 1
-                            FROM information_schema.columns
-                            WHERE table_schema = 'public'
-                                AND table_name = target_table
-                                AND column_name = 'Created'
-                                AND data_type = 'timestamp without time zone'
-                        ) THEN
-                            EXECUTE format(
-                                'ALTER TABLE public.%I ALTER COLUMN "Created" TYPE timestamp with time zone USING "Created" AT TIME ZONE ''UTC''',
-                                target_table);
-                        END IF;
-
-                        IF EXISTS (
-                            SELECT 1
-                            FROM information_schema.columns
-                            WHERE table_schema = 'public'
-                                AND table_name = target_table
-                                AND column_name = 'Modified'
-                                AND data_type = 'timestamp without time zone'
-                        ) THEN
-                            EXECUTE format(
-                                'ALTER TABLE public.%I ALTER COLUMN "Modified" TYPE timestamp with time zone USING "Modified" AT TIME ZONE ''UTC''',
-                                target_table);
-                        END IF;
-                    END LOOP;
-
-                    IF NOT EXISTS (
+                FOREACH target_table IN ARRAY audit_tables LOOP
+                    IF EXISTS (
                         SELECT 1
                         FROM information_schema.columns
                         WHERE table_schema = 'public'
-                            AND table_name = 'Approaches'
-                            AND column_name = 'TransitSignalPriorityNumber'
+                            AND table_name = target_table
+                            AND column_name = 'Created'
+                            AND data_type = 'timestamp without time zone'
                     ) THEN
-                        ALTER TABLE public."Approaches" ADD COLUMN "TransitSignalPriorityNumber" integer NULL;
+                        EXECUTE format(
+                            'ALTER TABLE public.%I ALTER COLUMN "Created" TYPE timestamp with time zone USING "Created" AT TIME ZONE ''UTC''',
+                            target_table);
                     END IF;
 
-                    INSERT INTO public."__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-                    VALUES ('20260521163837_5_3', '8.0.22')
-                    ON CONFLICT ("MigrationId") DO NOTHING;
+                    IF EXISTS (
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                            AND table_name = target_table
+                            AND column_name = 'Modified'
+                            AND data_type = 'timestamp without time zone'
+                    ) THEN
+                        EXECUTE format(
+                            'ALTER TABLE public.%I ALTER COLUMN "Modified" TYPE timestamp with time zone USING "Modified" AT TIME ZONE ''UTC''',
+                            target_table);
+                    END IF;
+                END LOOP;
+
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                        AND table_name = 'Approaches'
+                        AND column_name = 'TransitSignalPriorityNumber'
+                ) THEN
+                    ALTER TABLE public."Approaches" ADD COLUMN "TransitSignalPriorityNumber" integer NULL;
                 END IF;
+
+                INSERT INTO public."__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+                VALUES ('20260521163837_5_3', '8.0.22')
+                ON CONFLICT ("MigrationId") DO NOTHING;
             END $$;
             """);
     }
@@ -1139,11 +1138,11 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
     //        Description = "None",
     //        Protocol = ATSPM.Table.Enums.TransportProtocols.Unknown,
     //        ConnectionTimeout = 2000,
-    //        Directory = "Unkown",
+    //        Directory = "Unknown",
     //        OperationTimout = 2000,
     //        Port = 0,
     //        UserName = "Unknown",
-    //        Password = "Unkown",
+    //        Password = "Unknown",
     //        ProductId = 11
     //    });
     //    deviceRepository.Add(new Device

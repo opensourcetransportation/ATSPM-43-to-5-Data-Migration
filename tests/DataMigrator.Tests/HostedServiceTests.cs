@@ -17,6 +17,8 @@
 
 using DataMigrator.Commands;
 using DataMigrator.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -26,6 +28,23 @@ namespace DataMigrator.Tests;
 
 public sealed class HostedServiceTests
 {
+    [Fact]
+    public async Task TransferConfigHostedService_ResolvesScopedMigrationServiceWithinScope()
+    {
+        var recorder = new RecordingConfigurationMigrationService();
+        var services = new ServiceCollection();
+        services.AddSingleton(Options.Create(new TransferConfigCommandConfiguration { Source = "source" }));
+        services.AddScoped<IConfigurationMigrationService>(_ => recorder);
+        services.AddHostedService<TransferConfigCommandHostedService>();
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var hostedService = provider.GetServices<IHostedService>().Single();
+
+        await hostedService.StartAsync(CancellationToken.None);
+
+        Assert.NotNull(recorder.LastConfig);
+        Assert.Equal("source", recorder.LastConfig!.Source);
+    }
+
     [Fact]
     public async Task TransferConfigHostedService_ForwardsOptions()
     {

@@ -15,12 +15,12 @@ Start and end values are inclusive. Processing is divided into hourly windows.
 
 | Input | Behavior |
 | --- | --- |
-| Event `--end 2024-01-07` | Includes midnight at the start of January 7, not the whole day |
+| Event `--end 2024-01-07` | Includes the entire January 7 date |
 | Event `--end 2024-01-07T23:59:59` | Includes the whole day through the stated second |
 | Speed `--end 2024-01-07` | Includes the entire January 7 date |
 | Speed `--end 2024-01-07T12:00:00` | Stops at the stated inclusive time |
 
-For the combined command, use an explicit end-of-day timestamp when both event and speed phases should cover whole days.
+Date-only end values have the same whole-day meaning for event, speed, and combined migrations.
 
 ## `transfer-config`
 
@@ -28,7 +28,7 @@ Imports ATSPM configuration and speed-device configuration.
 
 ```powershell
 dotnet run --project . -- transfer-config `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..."
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..."
 ```
 
 | Option | Required/default | Meaning |
@@ -46,7 +46,7 @@ Imports controller events from `dbo.Controller_Event_Log` and stores compressed 
 
 ```powershell
 dotnet run --project . -- transfer-events `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01T00:00:00 `
   --end 2024-01-01T23:59:59 `
   --locations 1234
@@ -56,8 +56,8 @@ dotnet run --project . -- transfer-events `
 | --- | --- | --- |
 | `--source` | Required | ATSPM 4.3 SQL Server connection string |
 | `--start` | Required | Inclusive start date/time |
-| `--end` | Required | Inclusive end date/time; date-only values do not imply the whole day |
-| `--batch` | Default `500` | Positive number of compressed event windows written per target batch |
+| `--end` | Required | Inclusive end; a date-only value includes the entire end date |
+| `--batch` | Default `500`, maximum `600` | Positive number of compressed event windows written per target batch |
 | `--device` | Optional | Integer `DeviceTypes` filter applied while selecting locations; normally omit for controller-event migration |
 | `--locations` | Optional | Comma-separated location identifiers, for example `1234,5678` |
 
@@ -71,7 +71,7 @@ Imports source speed events and stores compressed speed-event windows in the tar
 
 ```powershell
 dotnet run --project . -- transfer-speed `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01 `
   --end 2024-01-07 `
   --locations 1234
@@ -94,7 +94,7 @@ Runs configuration, controller-event, and speed-event phases in that order.
 
 ```powershell
 dotnet run --project . -- upgrade-to-5 `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01T00:00:00 `
   --end 2024-01-07T23:59:59
 ```
@@ -112,14 +112,14 @@ Examples:
 ```powershell
 # Configuration only
 dotnet run --project . -- upgrade-to-5 `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01T00:00:00 `
   --end 2024-01-01T23:59:59 `
   --skip-events --skip-speed
 
 # Retry speed only
 dotnet run --project . -- upgrade-to-5 `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01T00:00:00 `
   --end 2024-01-01T23:59:59 `
   --locations 1234 `

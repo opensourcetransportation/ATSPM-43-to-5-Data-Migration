@@ -54,7 +54,7 @@ public sealed class TransferSpeedEventsCommand : Command, ICommandOption<Migrati
         services.AddSingleton(GetOptionsBinder());
         services.AddOptions<MigrationCommandConfiguration>().Bind(host.Configuration.GetSection(nameof(MigrationCommandConfiguration)));
         services.AddOptions<MigrationCommandConfiguration>().BindCommandLine();
-        services.AddSingleton<ISpeedEventMigrationService, SpeedEventMigrationService>();
+        services.AddScoped<ISpeedEventMigrationService, SpeedEventMigrationService>();
         services.AddHostedService<TransferSpeedEventsHostedService>();
     }
 }

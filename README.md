@@ -45,18 +45,18 @@ Documented production target provider names are `PostgreSql`, `SqlServer`, `MySq
 
 ```powershell
 dotnet run --project . -- transfer-config `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..."
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..."
 ```
 
 For a clean replacement, first take a backup and then add `--delete`.
 
 ## 3. Validate a Small Event Slice
 
-Event start and end values are inclusive. For a whole day, specify the end of the day explicitly:
+Event start and end values are inclusive. A date-only end value includes that entire date:
 
 ```powershell
 dotnet run --project . -- transfer-events `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01T00:00:00 `
   --end 2024-01-01T23:59:59 `
   --locations 1234
@@ -70,7 +70,7 @@ For speed migration, a date-only end value includes that entire date:
 
 ```powershell
 dotnet run --project . -- transfer-speed `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01 `
   --end 2024-01-07 `
   --locations 1234
@@ -82,7 +82,7 @@ After validating each phase, the combined command runs configuration, controller
 
 ```powershell
 dotnet run --project . -- upgrade-to-5 `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01T00:00:00 `
   --end 2024-01-07T23:59:59
 ```

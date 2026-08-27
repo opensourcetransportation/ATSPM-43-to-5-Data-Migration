@@ -25,7 +25,7 @@ For the standard path, use:
 
 ```powershell
 dotnet run --project . -- upgrade-to-5 `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01T00:00:00 `
   --end 2024-01-07T23:59:59
 ```
@@ -36,7 +36,7 @@ Configuration:
 
 ```powershell
 dotnet run --project . -- transfer-config `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --delete
 ```
 
@@ -44,7 +44,7 @@ Events:
 
 ```powershell
 dotnet run --project . -- transfer-events `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01T00:00:00 `
   --end 2024-01-07T23:59:59
 ```
@@ -53,7 +53,7 @@ Speed:
 
 ```powershell
 dotnet run --project . -- transfer-speed `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01 `
   --end 2024-01-07
 ```
@@ -90,7 +90,7 @@ Do this only after backing up the target and confirming both source and target c
 
 ```powershell
 dotnet run --project . -- transfer-config `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --delete
 ```
 
@@ -111,7 +111,7 @@ Why start this way:
 
 ```powershell
 dotnet run --project . -- transfer-events `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01T00:00:00 `
   --end 2024-01-01T23:59:59 `
   --locations 1234
@@ -146,7 +146,7 @@ Verify after the rerun:
 
 ```powershell
 dotnet run --project . -- transfer-speed `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01 `
   --end 2024-01-01 `
   --locations 1234

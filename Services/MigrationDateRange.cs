@@ -44,9 +44,9 @@ public static class MigrationDateRange
         }
     }
 
-    public static DateTime NormalizeInclusiveEndToExclusive(DateTime startInclusive, DateTime endInclusive, bool treatDateOnlyEndAsWholeDay)
+    public static DateTime NormalizeInclusiveEndToExclusive(DateTime startInclusive, DateTime endInclusive)
     {
-        if (treatDateOnlyEndAsWholeDay && endInclusive.TimeOfDay == TimeSpan.Zero && endInclusive.Date >= startInclusive.Date)
+        if (endInclusive.TimeOfDay == TimeSpan.Zero && endInclusive.Date >= startInclusive.Date)
         {
             return endInclusive.Date.AddDays(1);
         }

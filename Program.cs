@@ -33,6 +33,7 @@ commandBuilder.UseHost(
         .ApplyVolumeConfiguration()
         .ConfigureAppConfiguration((_, config) =>
         {
+            config.AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"), optional: false, reloadOnChange: false);
             config.AddUserSecrets<Program>(optional: true);
             config.AddCommandLine(args);
         })

@@ -53,8 +53,8 @@ namespace DataMigrator.Tests
             {
                 LocationIdentifier = "L1",
                 DeviceId = 1,
-                Start = new DateTime(2024,1,1),
-                End = new DateTime(2024,1,1).AddHours(1),
+                Start = new DateTime(2024, 1, 1),
+                End = new DateTime(2024, 1, 1).AddHours(1),
                 Data = new List<IndianaEvent>
                 {
                     new IndianaEvent { Timestamp = new DateTime(2024,1,1), EventCode = 1, EventParam = 2 }
@@ -88,8 +88,8 @@ namespace DataMigrator.Tests
                 {
                     LocationIdentifier = "LA",
                     DeviceId = 7,
-                    Start = new DateTime(2025,5,5),
-                    End = new DateTime(2025,5,5).AddHours(1),
+                    Start = new DateTime(2025, 5, 5),
+                    End = new DateTime(2025, 5, 5).AddHours(1),
                     Data = new List<IndianaEvent>()
                 };
                 context.IndiannaEvents.Add(existing);
@@ -129,6 +129,6 @@ namespace DataMigrator.Tests
             Assert.Equal(7, result[0].DeviceId);
         }
 
-        
+
     }
 }

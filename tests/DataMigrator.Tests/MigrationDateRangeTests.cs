@@ -38,12 +38,11 @@ public sealed class MigrationDateRangeTests
     }
 
     [Fact]
-    public void NormalizeInclusiveEndToExclusive_ExtendsDateOnlySpeedRangeByOneDay()
+    public void NormalizeInclusiveEndToExclusive_ExtendsDateOnlyRangeByOneDay()
     {
         var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(
             new DateTime(2024, 1, 1, 0, 0, 0),
-            new DateTime(2024, 1, 7, 0, 0, 0),
-            treatDateOnlyEndAsWholeDay: true);
+            new DateTime(2024, 1, 7, 0, 0, 0));
 
         Assert.Equal(new DateTime(2024, 1, 8, 0, 0, 0), endExclusive);
     }
@@ -55,8 +54,7 @@ public sealed class MigrationDateRangeTests
 
         var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(
             new DateTime(2024, 1, 1, 0, 0, 0),
-            endInclusive,
-            treatDateOnlyEndAsWholeDay: false);
+            endInclusive);
 
         Assert.Equal(endInclusive.AddSeconds(1), endExclusive);
     }
@@ -68,8 +66,7 @@ public sealed class MigrationDateRangeTests
 
         var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(
             new DateTime(2024, 1, 1, 0, 0, 0),
-            endInclusive,
-            treatDateOnlyEndAsWholeDay: false);
+            endInclusive);
 
         Assert.Equal(endInclusive.AddTicks(1), endExclusive);
     }

@@ -21,7 +21,7 @@ Release builds contain a self-contained Windows x64 executable, so the target ma
 
    ```powershell
    .\DataMigrator.exe transfer-events `
-     --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+     --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
      --start 2024-01-01T09:00:00 `
      --end 2024-01-01T09:59:59 `
      --locations 1234
@@ -50,7 +50,7 @@ docker run --rm \
   -v "$(pwd)/appsettings.json:/app/appsettings.json:ro" \
   ghcr.io/opensourcetransportation/atspm-43-to-5-data-migration:latest \
   transfer-config \
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..."
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..."
 ```
 
 Or supply the required target contexts as environment variables:
@@ -63,7 +63,7 @@ docker run --rm \
   -e "ConnectionStrings__EventLogContext__ConnectionString=Host=db01;Database=atspm;Username=...;Password=..." \
   ghcr.io/opensourcetransportation/atspm-43-to-5-data-migration:latest \
   transfer-events \
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." \
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." \
   --start 2024-01-01T09:00:00 \
   --end 2024-01-01T09:59:59 \
   --locations 1234
@@ -87,7 +87,7 @@ To run a command from source:
 
 ```powershell
 dotnet run --project . -- transfer-config `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..."
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..."
 ```
 
 ## Installation Check

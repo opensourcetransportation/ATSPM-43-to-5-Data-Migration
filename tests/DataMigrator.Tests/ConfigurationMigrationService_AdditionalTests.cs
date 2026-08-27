@@ -17,6 +17,31 @@ namespace DataMigrator.Tests
     public class ConfigurationMigrationService_AdditionalTests
     {
         [Fact]
+        public void WireDetectionTypes_AppliesBaselineAndMappedTypes()
+        {
+            var first = new Detector { Id = 1 };
+            var second = new Detector { Id = 2 };
+            var baseline = new DetectionType { Id = DetectionTypes.B };
+            var mapped = new DetectionType { Id = DetectionTypes.AC };
+            var mappings = new List<DetectionTypeDetector>
+            {
+                new() { DetectionTypesId = (int)DetectionTypes.AC, DetectorsId = second.Id }
+            };
+            var method = typeof(ConfigurationMigrationService).GetMethod("WireDetectionTypes", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.NotNull(method);
+
+            method!.Invoke(null, new object[]
+            {
+                new List<Detector> { first, second },
+                new List<DetectionType> { baseline, mapped },
+                mappings
+            });
+
+            Assert.Equal(new[] { 1, 2 }, baseline.Detectors.Select(detector => detector.Id).OrderBy(id => id));
+            Assert.Equal(new[] { 2 }, mapped.Detectors.Select(detector => detector.Id));
+        }
+
+        [Fact]
         public void SetDetectionTypeMeasureType_AddsMeasureTypesPerDetectionType()
         {
             var detectionTypes = new List<DetectionType>

@@ -38,7 +38,7 @@ Core product rules:
 
 ### Verified
 
-- Re-verified locally on 2026-08-27: all 83 automated tests pass against the `5.3.1` package baseline.
+- Re-verified locally on 2026-08-27: all 87 automated tests pass against the `5.3.1` package baseline.
 - Re-verified locally on 2026-04-13: `dotnet build .\DataMigrator.csproj -c Release` succeeds.
 - Re-verified locally on 2026-04-10: `dotnet test .\DataMigrator.slnx -c Release` passes with 17 tests.
 - Re-verified locally on 2026-05-29: `dotnet test .\DataMigrator.slnx -c Release` passes with 24 tests.

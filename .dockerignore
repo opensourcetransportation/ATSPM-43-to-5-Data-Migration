@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/TestResults/
+.git/
+.github/
+.vs/
+.idea/
+.vscode/
+*.log
+*.lscache
+docs/
+tests/
+local-packages/

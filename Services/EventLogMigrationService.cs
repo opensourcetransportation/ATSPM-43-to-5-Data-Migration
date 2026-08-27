@@ -21,7 +21,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Polly;
-using Polly.Contrib.WaitAndRetry;
 using Polly.Retry;
 using System.Collections.Concurrent;
 using Utah.Udot.Atspm.Data;
@@ -45,6 +44,8 @@ internal delegate Task<CompressedEventLogs<IndianaEvent>?> EventLogLoader(
 public sealed class EventLogMigrationService : IEventLogMigrationService
 {
     private readonly record struct LogKey(string LocationIdentifier, int DeviceId, DateTime Start);
+    internal const int MaxInsertBatchSize = 600;
+    private const int MaxConcurrentSourceReads = 10;
 
     private readonly ILogger<EventLogMigrationService> _logger;
     private readonly IServiceProvider _serviceProvider;
@@ -68,31 +69,21 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
         _serviceProvider = serviceProvider;
         _locationRepository = locationRepository;
         _loadLogAsync = loadLogAsync ?? GetLogsAsync;
-        if (retryPolicy != null)
-        {
-            _retryPolicy = retryPolicy;
-        }
-        else
-        {
-            // If the SHORT_RETRY_POLICY env var is set, use a very short retry policy useful for tests
-            var shortPolicyFlag = Environment.GetEnvironmentVariable("SHORT_RETRY_POLICY");
-            if (!string.IsNullOrEmpty(shortPolicyFlag) && shortPolicyFlag == "1")
-            {
-                _retryPolicy = Policy
-                    .Handle<Exception>(exception => exception is not OperationCanceledException)
-                    .WaitAndRetryAsync(new[] { TimeSpan.Zero });
-            }
-            else
-            {
-                _retryPolicy = Policy
-                    .Handle<Exception>(exception => exception is not OperationCanceledException)
-                    .WaitAndRetryAsync(
-                        Backoff.DecorrelatedJitterBackoffV2(TimeSpan.FromSeconds(10), 5)
-                            .Concat(new[] { TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(30) })
-                            .Concat(Enumerable.Repeat(TimeSpan.FromDays(1), 24)),
-                        (exception, timeSpan, retryCount, _) => Console.WriteLine($"Retry {retryCount} after {timeSpan.TotalSeconds} seconds due to {exception.Message}"));
-            }
-        }
+        _retryPolicy = retryPolicy ?? Policy
+            .Handle<Exception>(exception => exception is not OperationCanceledException)
+            .WaitAndRetryAsync(
+                [
+                    TimeSpan.FromSeconds(2),
+                    TimeSpan.FromSeconds(5),
+                    TimeSpan.FromSeconds(10),
+                    TimeSpan.FromSeconds(20),
+                    TimeSpan.FromSeconds(30)
+                ],
+                (exception, timeSpan, retryCount, _) => _logger.LogWarning(
+                    "Retry {RetryCount} after {DelaySeconds} seconds. {Error}",
+                    retryCount,
+                    timeSpan.TotalSeconds,
+                    SensitiveDataRedactor.Redact(exception.Message)));
     }
 
     public async Task RunAsync(MigrationCommandConfiguration config, CancellationToken cancellationToken)
@@ -100,12 +91,13 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
         ValidateConfiguration(config);
         cancellationToken.ThrowIfCancellationRequested();
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(config.Start, config.End, treatDateOnlyEndAsWholeDay: false);
+        var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(config.Start, config.End);
         DeviceTypes? requiredDeviceType = config.Device.HasValue
             ? (DeviceTypes)config.Device.Value
             : null;
         var processedHours = 0;
-        var totalLocationReads = 0;
+        var locations = LoadCurrentLocations(requiredDeviceType, config.Locations);
+        var totalLocationReads = locations.Count;
         var totalCompressedWindows = 0;
         var totalSourceEvents = 0;
 
@@ -113,36 +105,40 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
         {
             processedHours++;
             _logger.LogInformation("Processing event data from {Start} to {End}", periodStart, periodEnd);
-            var locations = LoadCurrentLocations(requiredDeviceType, config.Locations);
-            totalLocationReads += locations.Count;
-
             var hourLogs = new ConcurrentBag<CompressedEventLogs<IndianaEvent>>();
             var readFailures = new ConcurrentBag<Exception>();
-            await Task.WhenAll(locations.Select(async location =>
-            {
-                try
+            await Parallel.ForEachAsync(
+                locations,
+                new ParallelOptions
                 {
-                    var log = await _loadLogAsync(periodStart, periodEnd, config.Source, location, cancellationToken);
-                    if (log != null)
+                    MaxDegreeOfParallelism = MaxConcurrentSourceReads,
+                    CancellationToken = cancellationToken
+                },
+                async (location, token) =>
+                {
+                    try
                     {
-                        hourLogs.Add(log);
+                        var log = await _loadLogAsync(periodStart, periodEnd, config.Source, location, token);
+                        if (log != null)
+                        {
+                            hourLogs.Add(log);
+                        }
                     }
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(
-                        "Failed to retrieve logs for {Location} between {Start} and {End}. {Error}",
-                        location.LocationIdentifier,
-                        periodStart,
-                        periodEnd,
-                        SensitiveDataRedactor.Redact(ex.Message));
-                    readFailures.Add(new InvalidOperationException(SensitiveDataRedactor.Redact(ex.Message)));
-                }
-            }));
+                    catch (OperationCanceledException) when (token.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(
+                            "Failed to retrieve logs for {Location} between {Start} and {End}. {Error}",
+                            location.LocationIdentifier,
+                            periodStart,
+                            periodEnd,
+                            SensitiveDataRedactor.Redact(ex.Message));
+                        readFailures.Add(new InvalidOperationException(SensitiveDataRedactor.Redact(ex.Message)));
+                    }
+                });
 
             if (!readFailures.IsEmpty)
             {
@@ -170,7 +166,7 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
     private async Task<CompressedEventLogs<IndianaEvent>?> GetLogsAsync(DateTime start, DateTime end, string sourceConnectionString, Location location, CancellationToken cancellationToken)
     {
         var connectionString = $"{sourceConnectionString};Max Pool Size=200;Connection Timeout=60;";
-                const string selectQuery = @"
+        const string selectQuery = @"
                         SELECT SignalId, Timestamp, EventCode, EventParam
                         FROM [dbo].[Controller_Event_Log]
                         WHERE SignalId = @locationIdentifier
@@ -255,6 +251,13 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
         if (config.Batch is <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(config), "The batch size must be greater than zero.");
+        }
+
+        if (config.Batch > MaxInsertBatchSize)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(config),
+                $"The batch size must not exceed {MaxInsertBatchSize} to stay below SQL Server's parameter limit.");
         }
 
         if (config.Device.HasValue && !Enum.IsDefined(typeof(DeviceTypes), config.Device.Value))

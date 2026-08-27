@@ -16,6 +16,7 @@
 #endregion
 
 using DataMigrator.Commands;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -26,12 +27,28 @@ namespace DataMigrator.Services;
 public sealed class UpgradeTo5HostedService : IHostedService
 {
     private readonly ILogger<UpgradeTo5HostedService> _logger;
-    private readonly IConfigurationMigrationService _configurationMigrationService;
-    private readonly IEventLogMigrationService _eventLogMigrationService;
-    private readonly ISpeedEventMigrationService _speedEventMigrationService;
+    private readonly IServiceScopeFactory? _scopeFactory;
+    private readonly IConfigurationMigrationService? _configurationMigrationService;
+    private readonly IEventLogMigrationService? _eventLogMigrationService;
+    private readonly ISpeedEventMigrationService? _speedEventMigrationService;
     private readonly UpgradeTo5CommandConfiguration _options;
 
-    public UpgradeTo5HostedService(ILogger<UpgradeTo5HostedService> logger, IConfigurationMigrationService configurationMigrationService, IEventLogMigrationService eventLogMigrationService, ISpeedEventMigrationService speedEventMigrationService, IOptions<UpgradeTo5CommandConfiguration> options)
+    public UpgradeTo5HostedService(
+        ILogger<UpgradeTo5HostedService> logger,
+        IServiceScopeFactory scopeFactory,
+        IOptions<UpgradeTo5CommandConfiguration> options)
+    {
+        _logger = logger;
+        _scopeFactory = scopeFactory;
+        _options = options.Value;
+    }
+
+    internal UpgradeTo5HostedService(
+        ILogger<UpgradeTo5HostedService> logger,
+        IConfigurationMigrationService configurationMigrationService,
+        IEventLogMigrationService eventLogMigrationService,
+        ISpeedEventMigrationService speedEventMigrationService,
+        IOptions<UpgradeTo5CommandConfiguration> options)
     {
         _logger = logger;
         _configurationMigrationService = configurationMigrationService;
@@ -43,12 +60,16 @@ public sealed class UpgradeTo5HostedService : IHostedService
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         var overallStopwatch = Stopwatch.StartNew();
+        using var scope = _scopeFactory?.CreateScope();
+        var configurationMigrationService = _configurationMigrationService ?? scope!.ServiceProvider.GetRequiredService<IConfigurationMigrationService>();
+        var eventLogMigrationService = _eventLogMigrationService ?? scope!.ServiceProvider.GetRequiredService<IEventLogMigrationService>();
+        var speedEventMigrationService = _speedEventMigrationService ?? scope!.ServiceProvider.GetRequiredService<ISpeedEventMigrationService>();
 
         if (!_options.SkipConfig)
         {
             await RunPhaseAsync(
                 phaseName: "configuration migration",
-                action: token => _configurationMigrationService.RunAsync(new TransferConfigCommandConfiguration
+                action: token => configurationMigrationService.RunAsync(new TransferConfigCommandConfiguration
                 {
                     Source = _options.Source,
                     Delete = _options.Delete,
@@ -62,7 +83,7 @@ public sealed class UpgradeTo5HostedService : IHostedService
         {
             await RunPhaseAsync(
                 phaseName: "event log migration",
-                action: token => _eventLogMigrationService.RunAsync(new MigrationCommandConfiguration
+                action: token => eventLogMigrationService.RunAsync(new MigrationCommandConfiguration
                 {
                     Source = _options.Source,
                     Start = _options.Start,
@@ -78,7 +99,7 @@ public sealed class UpgradeTo5HostedService : IHostedService
         {
             await RunPhaseAsync(
                 phaseName: "speed event migration",
-                action: token => _speedEventMigrationService.RunAsync(new MigrationCommandConfiguration
+                action: token => speedEventMigrationService.RunAsync(new MigrationCommandConfiguration
                 {
                     Source = _options.Source,
                     Start = _options.Start,

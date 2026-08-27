@@ -11,7 +11,6 @@ $startInfo.UseShellExecute = $false
 $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
 # Enable short retry policy in tests
-$startInfo.EnvironmentVariables["SHORT_RETRY_POLICY"] = "1"
 $process = New-Object System.Diagnostics.Process
 $process.StartInfo = $startInfo
 $process.Start() | Out-Null

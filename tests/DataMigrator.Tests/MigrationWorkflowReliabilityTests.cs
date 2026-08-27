@@ -185,6 +185,49 @@ public sealed class MigrationWorkflowReliabilityTests
     }
 
     [Fact]
+    public async Task SpeedRunAsync_LoadsLocationsOnceAcrossMultipleHours()
+    {
+        using var provider = BuildEventLogProvider();
+        var repository = CreateLocationRepository(CreateSpeedLocation());
+        var sourceCalls = 0;
+        var service = new SpeedEventMigrationService(
+            NullLogger<SpeedEventMigrationService>.Instance,
+            provider,
+            repository.Object,
+            (_, _, _, _, _, _) =>
+            {
+                Interlocked.Increment(ref sourceCalls);
+                return Task.CompletedTask;
+            },
+            (_, _) => Task.CompletedTask);
+        var configuration = CreateMigrationConfiguration();
+        configuration.End = configuration.Start.AddHours(2).AddTicks(-1);
+
+        await service.RunAsync(configuration, CancellationToken.None);
+
+        repository.Verify(value => value.GetList(), Times.Once);
+        Assert.Equal(2, sourceCalls);
+    }
+
+    [Fact]
+    public async Task SpeedRunAsync_PreservesTerminalSourceException()
+    {
+        using var provider = BuildEventLogProvider();
+        var expected = new NotSupportedException("unsupported source shape");
+        var service = new SpeedEventMigrationService(
+            NullLogger<SpeedEventMigrationService>.Instance,
+            provider,
+            CreateLocationRepository(CreateSpeedLocation()).Object,
+            (_, _, _, _, _, _) => Task.FromException(expected),
+            (_, _) => Task.CompletedTask);
+
+        var actual = await Assert.ThrowsAsync<NotSupportedException>(
+            () => service.RunAsync(CreateMigrationConfiguration(), CancellationToken.None));
+
+        Assert.Same(expected, actual);
+    }
+
+    [Fact]
     public async Task EventRunAsync_TerminalSourceFailureIsReportedWithoutWriting()
     {
         using var provider = BuildEventLogProvider();
@@ -291,6 +334,87 @@ public sealed class MigrationWorkflowReliabilityTests
             () => service.RunAsync(configuration, CancellationToken.None));
 
         repository.Verify(value => value.GetList(), Times.Never);
+    }
+
+    [Fact]
+    public async Task EventRunAsync_RejectsBatchAboveSqlServerParameterLimitBeforeReadingLocations()
+    {
+        using var provider = BuildEventLogProvider();
+        var repository = new Mock<ILocationRepository>();
+        var service = CreateEventService(provider, Policy.Handle<Exception>().RetryAsync(0), repository.Object);
+        var configuration = CreateMigrationConfiguration();
+        configuration.Batch = EventLogMigrationService.MaxInsertBatchSize + 1;
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => service.RunAsync(configuration, CancellationToken.None));
+
+        repository.Verify(value => value.GetList(), Times.Never);
+    }
+
+    [Fact]
+    public async Task EventRunAsync_LoadsLocationsOnceAndLimitsSourceConcurrency()
+    {
+        using var provider = BuildEventLogProvider();
+        var locations = Enumerable.Range(1, 25)
+            .Select(index => CreateEventLocation($"L{index}", index))
+            .ToArray();
+        var repository = CreateLocationRepository(locations);
+        var currentConcurrency = 0;
+        var maximumConcurrency = 0;
+        var sourceCalls = 0;
+        var service = new EventLogMigrationService(
+            NullLogger<EventLogMigrationService>.Instance,
+            provider,
+            repository.Object,
+            Policy.Handle<Exception>().RetryAsync(0),
+            async (_, _, _, _, token) =>
+            {
+                Interlocked.Increment(ref sourceCalls);
+                var current = Interlocked.Increment(ref currentConcurrency);
+                int observed;
+                do
+                {
+                    observed = maximumConcurrency;
+                }
+                while (current > observed && Interlocked.CompareExchange(ref maximumConcurrency, current, observed) != observed);
+
+                await Task.Delay(20, token);
+                Interlocked.Decrement(ref currentConcurrency);
+                return null;
+            });
+        var configuration = CreateMigrationConfiguration();
+        configuration.End = configuration.Start.AddHours(2).AddTicks(-1);
+
+        await service.RunAsync(configuration, CancellationToken.None);
+
+        repository.Verify(value => value.GetList(), Times.Once);
+        Assert.Equal(50, sourceCalls);
+        Assert.InRange(maximumConcurrency, 1, 10);
+    }
+
+    [Fact]
+    public async Task EventRunAsync_DateOnlyEndIncludesWholeDay()
+    {
+        using var provider = BuildEventLogProvider();
+        var sourceCalls = 0;
+        var location = CreateEventLocation();
+        var service = new EventLogMigrationService(
+            NullLogger<EventLogMigrationService>.Instance,
+            provider,
+            CreateLocationRepository(location).Object,
+            Policy.Handle<Exception>().RetryAsync(0),
+            (_, _, _, _, _) =>
+            {
+                Interlocked.Increment(ref sourceCalls);
+                return Task.FromResult<CompressedEventLogs<IndianaEvent>?>(null);
+            });
+        var configuration = CreateMigrationConfiguration();
+        configuration.Start = new DateTime(2026, 1, 1);
+        configuration.End = new DateTime(2026, 1, 1);
+
+        await service.RunAsync(configuration, CancellationToken.None);
+
+        Assert.Equal(24, sourceCalls);
     }
 
     [Fact]

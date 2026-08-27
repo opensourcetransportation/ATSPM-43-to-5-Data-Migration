@@ -7,7 +7,7 @@
 Pass the source connection string to every command with `--source`:
 
 ```powershell
---source "Server=sql01;Database=MOE;User Id=...;Password=...;Encrypt=True;TrustServerCertificate=True"
+--source "Server=sql01;Database=ATSPM43;User Id=...;Password=...;Encrypt=True;TrustServerCertificate=True"
 ```
 
 The login needs connection permission and `SELECT` access to the objects used by the selected phase:
@@ -78,13 +78,13 @@ For PostgreSQL targets, `transfer-config` also:
 
 1. Applies pending `ConfigContext` EF migrations.
 2. Applies the idempotent `20260521163837_5_3` compatibility bridge when needed.
-3. Uses `TRUNCATE ... RESTART IDENTITY CASCADE` when `--delete` is selected.
+3. Deletes the documented configuration entity set in a transaction when `--delete` is selected.
 
 The PostgreSQL login therefore needs the DDL and ownership privileges required for those operations. Other providers do not receive automatic schema migration from this service; apply the target application's schema before running the migrator.
 
 ## Destructive Configuration Replacement
 
-`--delete` is not a dry run. It removes existing target routes, devices, detectors, approaches, locations, areas, jurisdictions, regions, device configurations, and products before importing source configuration.
+`--delete` is not a dry run. It removes existing target route locations, routes, devices, detectors, approaches, locations, areas, jurisdictions, regions, device configurations, and products before importing source configuration. It does not issue an unbounded provider-specific `CASCADE` command.
 
 Before using it:
 

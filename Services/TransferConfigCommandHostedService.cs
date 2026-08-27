@@ -16,6 +16,7 @@
 #endregion
 
 using DataMigrator.Commands;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
@@ -23,15 +24,32 @@ namespace DataMigrator.Services;
 
 public sealed class TransferConfigCommandHostedService : IHostedService
 {
-    private readonly IConfigurationMigrationService _service;
+    private readonly IServiceScopeFactory? _scopeFactory;
+    private readonly IConfigurationMigrationService? _service;
     private readonly TransferConfigCommandConfiguration _options;
 
-    public TransferConfigCommandHostedService(IConfigurationMigrationService service, IOptions<TransferConfigCommandConfiguration> options)
+    public TransferConfigCommandHostedService(IServiceScopeFactory scopeFactory, IOptions<TransferConfigCommandConfiguration> options)
+    {
+        _scopeFactory = scopeFactory;
+        _options = options.Value;
+    }
+
+    internal TransferConfigCommandHostedService(IConfigurationMigrationService service, IOptions<TransferConfigCommandConfiguration> options)
     {
         _service = service;
         _options = options.Value;
     }
 
-    public Task StartAsync(CancellationToken cancellationToken) => _service.RunAsync(_options, cancellationToken);
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        if (_service != null)
+        {
+            await _service.RunAsync(_options, cancellationToken);
+            return;
+        }
+
+        using var scope = _scopeFactory!.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IConfigurationMigrationService>().RunAsync(_options, cancellationToken);
+    }
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

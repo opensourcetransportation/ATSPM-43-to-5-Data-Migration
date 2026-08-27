@@ -33,7 +33,7 @@ Example narrow speed retry:
 
 ```powershell
 dotnet run --project . -- transfer-speed `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01T09:00:00 `
   --end 2024-01-01T09:59:59 `
   --locations 1234
@@ -111,7 +111,7 @@ Example speed-only orchestration retry:
 
 ```powershell
 dotnet run --project . -- upgrade-to-5 `
-  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
   --start 2024-01-01T09:00:00 `
   --end 2024-01-01T09:59:59 `
   --skip-config `
@@ -136,7 +136,7 @@ Configuration queries are defined in `appsettings.json` under `LocationQueries`.
 
 - A source `SELECT permission denied` error means the SQL Server login lacks access to one or more 4.3 tables listed in [Configuration and Permissions](configuration.md).
 - A target insert/update error usually means the target login lacks DML permission or the target schema does not match the configured provider package.
-- PostgreSQL errors involving migrations, `ALTER TABLE`, or `TRUNCATE` require a login with the DDL/ownership permissions described in [Configuration and Permissions](configuration.md).
+- PostgreSQL errors involving migrations or `ALTER TABLE` require a login with the DDL/ownership permissions described in [Configuration and Permissions](configuration.md).
 - Other target providers must have the target schema applied before migration; this tool only performs automatic schema compatibility work for PostgreSQL configuration targets.
 
 ## When To Escalate

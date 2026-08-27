@@ -49,6 +49,9 @@ namespace DataMigrator.Tests
             Assert.Contains("@detectorId1", query);
             Assert.Contains("@detectorId2", query);
             Assert.Contains("OPTION (RECOMPILE)", query, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("FROM [dbo].[Speed_Events]", query, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("MOE", query, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("INDEX(", query, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]

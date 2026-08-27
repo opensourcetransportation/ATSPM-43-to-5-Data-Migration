@@ -54,7 +54,7 @@ public sealed class TransferConfigCommand : Command, ICommandOption<TransferConf
         services.AddSingleton(GetOptionsBinder());
         services.AddOptions<TransferConfigCommandConfiguration>().Bind(host.Configuration.GetSection(nameof(TransferConfigCommandConfiguration)));
         services.AddOptions<TransferConfigCommandConfiguration>().BindCommandLine();
-        services.AddSingleton<IConfigurationMigrationService, ConfigurationMigrationService>();
+        services.AddScoped<IConfigurationMigrationService, ConfigurationMigrationService>();
         services.AddHostedService<TransferConfigCommandHostedService>();
     }
 }

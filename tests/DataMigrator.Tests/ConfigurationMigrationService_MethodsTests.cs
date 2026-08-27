@@ -29,6 +29,18 @@ namespace DataMigrator.Tests
         }
 
         [Fact]
+        public void DefaultLocationQueries_DoNotHardcodeSourceDatabaseName()
+        {
+            var configuration = new ConfigurationBuilder()
+                .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"), optional: false)
+                .Build();
+            var queries = configuration.GetSection("LocationQueries").GetChildren();
+
+            Assert.NotEmpty(queries);
+            Assert.All(queries, query => Assert.DoesNotContain("[MOE]", query.Value, StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
         public void GetColumnMappings_ReturnsMappingsFromConfiguration()
         {
             var settings = new Dictionary<string, string>
@@ -294,7 +306,7 @@ namespace DataMigrator.Tests
             SetEmptySourceConfig(svc);
             InvokePrivate(svc, "ImportRouteLocations", new object[] { new Dictionary<string, string> { ["RouteLocations"] = "query" }, new Dictionary<string, Dictionary<string, string>> { ["RouteLocations"] = new Dictionary<string, string>() } });
 
-            repo.Verify(r => r.AddRange(It.IsAny<IEnumerable<RouteLocation>>() ), Times.Once);
+            repo.Verify(r => r.AddRange(It.IsAny<IEnumerable<RouteLocation>>()), Times.Once);
         }
 
         [Fact]
