@@ -19,6 +19,8 @@ namespace DataMigrator.Services;
 
 public static class MigrationDateRange
 {
+    private const string DateOnlyFormat = "yyyy-MM-dd";
+
     public static IEnumerable<(DateTime Start, DateTime End)> EnumerateHourlyWindows(DateTime startInclusive, DateTime endExclusive)
     {
         if (endExclusive <= startInclusive)
@@ -44,18 +46,24 @@ public static class MigrationDateRange
         }
     }
 
-    public static DateTime NormalizeInclusiveEndToExclusive(DateTime startInclusive, DateTime endInclusive)
+    public static DateTime NormalizeInclusiveEndToExclusive(
+        DateTime startInclusive,
+        DateTime endInclusive,
+        bool endIsDateOnly = false)
     {
-        if (endInclusive.TimeOfDay == TimeSpan.Zero && endInclusive.Date >= startInclusive.Date)
+        if (endIsDateOnly)
         {
             return endInclusive.Date.AddDays(1);
         }
 
-        if (endInclusive.Ticks % TimeSpan.TicksPerSecond == 0)
-        {
-            return endInclusive.AddSeconds(1);
-        }
-
         return endInclusive.AddTicks(1);
     }
+
+    public static bool IsDateOnly(string? value) =>
+        DateTime.TryParseExact(
+            value,
+            DateOnlyFormat,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None,
+            out _);
 }

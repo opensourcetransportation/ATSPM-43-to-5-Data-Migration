@@ -21,6 +21,7 @@ Start and end values are inclusive. Processing is divided into hourly windows.
 | Speed `--end 2024-01-07T12:00:00` | Stops at the stated inclusive time |
 
 Date-only end values have the same whole-day meaning for event, speed, and combined migrations.
+An explicit midnight value such as `--end 2024-01-07T00:00:00` includes only that instant; use `--end 2024-01-07` to include the entire date.
 
 ## `transfer-config`
 
@@ -100,6 +101,8 @@ dotnet run --project . -- upgrade-to-5 `
 ```
 
 It accepts the configuration and event options above, plus:
+
+For this combined command, `--source`, `--start`, and `--end` may be omitted when their values are supplied under `UpgradeTo5CommandConfiguration` in appsettings or environment variables. Explicit command-line values take precedence.
 
 | Option | Default | Meaning |
 | --- | --- | --- |

@@ -43,6 +43,7 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
 {
     private readonly record struct LogKey(string LocationIdentifier, int DeviceId, DateTime Start);
     private const int SourceQueryTimeoutSeconds = 300;
+    internal const int MaxDetectorParametersPerQuery = 2000;
 
     private readonly ILogger<SpeedEventMigrationService> _logger;
     private readonly IServiceProvider _serviceProvider;
@@ -74,7 +75,7 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
         ValidateConfiguration(config);
         cancellationToken.ThrowIfCancellationRequested();
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(config.Start, config.End);
+        var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(config.Start, config.End, config.EndIsDateOnly);
         var processedHours = 0;
         var locations = LoadCurrentLocations(config.Locations);
         var totalLocationReads = locations.Count;
@@ -264,8 +265,6 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
             return;
         }
 
-        var query = BuildSpeedEventQuery(detectorIdentifiers.Count);
-
         var eventLogs = new List<SpeedEvent>();
         _logger.LogInformation(
             "Querying source speed events for {Location} between {Start} and {End} using {DetectorCount} exact detector ids.",
@@ -276,26 +275,29 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
         var normalizedSourceConnectionString = BuildSourceConnectionString(sourceConnectionString);
         using var conn = new Microsoft.Data.SqlClient.SqlConnection(normalizedSourceConnectionString);
         await conn.OpenAsync(cancellationToken);
-        using var cmd = new Microsoft.Data.SqlClient.SqlCommand(query, conn);
-        cmd.CommandType = CommandType.Text;
-        cmd.Parameters.Add("@startUtc", SqlDbType.DateTime2).Value = startUtc;
-        cmd.Parameters.Add("@endUtc", SqlDbType.DateTime2).Value = endUtc;
-        for (var index = 0; index < detectorIdentifiers.Count; index++)
+        foreach (var detectorChunk in ChunkDetectorIdentifiers(detectorIdentifiers))
         {
-            cmd.Parameters.Add($"@detectorId{index}", SqlDbType.VarChar, 50).Value = detectorIdentifiers[index];
-        }
-
-        cmd.CommandTimeout = SourceQueryTimeoutSeconds;
-        using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            eventLogs.Add(new SpeedEvent
+            using var cmd = new Microsoft.Data.SqlClient.SqlCommand(BuildSpeedEventQuery(detectorChunk.Length), conn);
+            cmd.CommandType = CommandType.Text;
+            cmd.Parameters.Add("@startUtc", SqlDbType.DateTime2).Value = startUtc;
+            cmd.Parameters.Add("@endUtc", SqlDbType.DateTime2).Value = endUtc;
+            for (var index = 0; index < detectorChunk.Length; index++)
             {
-                DetectorId = reader.GetString(reader.GetOrdinal("DetectorID")),
-                Mph = reader.GetInt32(reader.GetOrdinal("MPH")),
-                Kph = reader.GetInt32(reader.GetOrdinal("KPH")),
-                Timestamp = reader.GetDateTime(reader.GetOrdinal("Timestamp"))
-            });
+                cmd.Parameters.Add($"@detectorId{index}", SqlDbType.NVarChar, 50).Value = detectorChunk[index];
+            }
+
+            cmd.CommandTimeout = SourceQueryTimeoutSeconds;
+            using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                eventLogs.Add(new SpeedEvent
+                {
+                    DetectorId = reader.GetString(reader.GetOrdinal("DetectorID")),
+                    Mph = reader.GetInt32(reader.GetOrdinal("MPH")),
+                    Kph = reader.GetInt32(reader.GetOrdinal("KPH")),
+                    Timestamp = reader.GetDateTime(reader.GetOrdinal("Timestamp"))
+                });
+            }
         }
 
         _logger.LogInformation("Loaded {Count} source speed events for {Location} between {Start} and {End}.", eventLogs.Count, location.LocationIdentifier, startUtc, endUtc);
@@ -409,6 +411,11 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
     }
     private static string BuildSpeedEventQuery(int detectorCount)
     {
+        if (detectorCount is <= 0 or > MaxDetectorParametersPerQuery)
+        {
+            throw new ArgumentOutOfRangeException(nameof(detectorCount));
+        }
+
         var detectorParameters = string.Join(", ", Enumerable.Range(0, detectorCount).Select(index => $"@detectorId{index}"));
 
         return $@"
@@ -419,6 +426,9 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
                                      AND DetectorID IN ({detectorParameters})
                                 OPTION (RECOMPILE)";
     }
+
+    internal static IEnumerable<string[]> ChunkDetectorIdentifiers(IEnumerable<string> detectorIdentifiers) =>
+        detectorIdentifiers.Chunk(MaxDetectorParametersPerQuery);
 }
 
 

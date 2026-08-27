@@ -393,6 +393,40 @@ public sealed class MigrationWorkflowReliabilityTests
     }
 
     [Fact]
+    public async Task EventRunAsync_PersistsBoundedLocationGroupsBeforeFleetHourCompletes()
+    {
+        using var provider = BuildEventLogProvider();
+        var locations = Enumerable.Range(0, 25)
+            .Select(index => CreateEventLocation($"L{index:D3}", index + 1))
+            .ToArray();
+        var persistedBeforeSecondGroup = false;
+        var service = new EventLogMigrationService(
+            NullLogger<EventLogMigrationService>.Instance,
+            provider,
+            CreateLocationRepository(locations).Object,
+            Policy.Handle<Exception>().RetryAsync(0),
+            (start, end, _, location, _) =>
+            {
+                if (location.LocationIdentifier == "L010")
+                {
+                    using var scope = provider.CreateScope();
+                    persistedBeforeSecondGroup = scope.ServiceProvider
+                        .GetRequiredService<EventLogContext>()
+                        .IndiannaEvents
+                        .Any();
+                }
+
+                return Task.FromResult<CompressedEventLogs<IndianaEvent>?>(CreateEventLog(location, start, end));
+            });
+
+        await service.RunAsync(CreateMigrationConfiguration(), CancellationToken.None);
+
+        Assert.True(persistedBeforeSecondGroup);
+        await using var verificationScope = provider.CreateAsyncScope();
+        Assert.Equal(25, await verificationScope.ServiceProvider.GetRequiredService<EventLogContext>().IndiannaEvents.CountAsync());
+    }
+
+    [Fact]
     public async Task EventRunAsync_DateOnlyEndIncludesWholeDay()
     {
         using var provider = BuildEventLogProvider();
@@ -411,6 +445,7 @@ public sealed class MigrationWorkflowReliabilityTests
         var configuration = CreateMigrationConfiguration();
         configuration.Start = new DateTime(2026, 1, 1);
         configuration.End = new DateTime(2026, 1, 1);
+        configuration.EndIsDateOnly = true;
 
         await service.RunAsync(configuration, CancellationToken.None);
 
@@ -491,7 +526,7 @@ public sealed class MigrationWorkflowReliabilityTests
     [Fact]
     public async Task EventInsert_FailedReplacementRollsBackOriginalWindow()
     {
-        var interceptor = new ScriptedSaveChangesInterceptor(3);
+        var interceptor = new ScriptedSaveChangesInterceptor(2);
         using var provider = BuildEventLogProvider(interceptor);
         await using (var seedScope = provider.CreateAsyncScope())
         {

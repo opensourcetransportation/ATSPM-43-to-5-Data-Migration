@@ -91,7 +91,7 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
         ValidateConfiguration(config);
         cancellationToken.ThrowIfCancellationRequested();
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(config.Start, config.End);
+        var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(config.Start, config.End, config.EndIsDateOnly);
         DeviceTypes? requiredDeviceType = config.Device.HasValue
             ? (DeviceTypes)config.Device.Value
             : null;
@@ -105,52 +105,55 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
         {
             processedHours++;
             _logger.LogInformation("Processing event data from {Start} to {End}", periodStart, periodEnd);
-            var hourLogs = new ConcurrentBag<CompressedEventLogs<IndianaEvent>>();
-            var readFailures = new ConcurrentBag<Exception>();
-            await Parallel.ForEachAsync(
-                locations,
-                new ParallelOptions
-                {
-                    MaxDegreeOfParallelism = MaxConcurrentSourceReads,
-                    CancellationToken = cancellationToken
-                },
-                async (location, token) =>
-                {
-                    try
-                    {
-                        var log = await _loadLogAsync(periodStart, periodEnd, config.Source, location, token);
-                        if (log != null)
-                        {
-                            hourLogs.Add(log);
-                        }
-                    }
-                    catch (OperationCanceledException) when (token.IsCancellationRequested)
-                    {
-                        throw;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(
-                            "Failed to retrieve logs for {Location} between {Start} and {End}. {Error}",
-                            location.LocationIdentifier,
-                            periodStart,
-                            periodEnd,
-                            SensitiveDataRedactor.Redact(ex.Message));
-                        readFailures.Add(new InvalidOperationException(SensitiveDataRedactor.Redact(ex.Message)));
-                    }
-                });
-
-            if (!readFailures.IsEmpty)
+            foreach (var locationGroup in locations.Chunk(MaxConcurrentSourceReads))
             {
-                throw new AggregateException(
-                    $"Failed to retrieve event logs for {readFailures.Count} location(s) between {periodStart} and {periodEnd}.",
-                    readFailures);
-            }
+                var groupLogs = new ConcurrentBag<CompressedEventLogs<IndianaEvent>>();
+                var readFailures = new ConcurrentBag<Exception>();
+                await Parallel.ForEachAsync(
+                    locationGroup,
+                    new ParallelOptions
+                    {
+                        MaxDegreeOfParallelism = MaxConcurrentSourceReads,
+                        CancellationToken = cancellationToken
+                    },
+                    async (location, token) =>
+                    {
+                        try
+                        {
+                            var log = await _loadLogAsync(periodStart, periodEnd, config.Source, location, token);
+                            if (log != null)
+                            {
+                                groupLogs.Add(log);
+                            }
+                        }
+                        catch (OperationCanceledException) when (token.IsCancellationRequested)
+                        {
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(
+                                "Failed to retrieve logs for {Location} between {Start} and {End}. {Error}",
+                                location.LocationIdentifier,
+                                periodStart,
+                                periodEnd,
+                                SensitiveDataRedactor.Redact(ex.Message));
+                            readFailures.Add(new InvalidOperationException(SensitiveDataRedactor.Redact(ex.Message)));
+                        }
+                    });
 
-            var hourLogList = hourLogs.ToList();
-            totalCompressedWindows += hourLogList.Count;
-            totalSourceEvents += hourLogList.Sum(log => log.Data.Count);
-            await InsertLogsWithRetryAsync(hourLogList, config, cancellationToken);
+                if (!readFailures.IsEmpty)
+                {
+                    throw new AggregateException(
+                        $"Failed to retrieve event logs for {readFailures.Count} location(s) between {periodStart} and {periodEnd}.",
+                        readFailures);
+                }
+
+                var groupLogList = groupLogs.ToList();
+                totalCompressedWindows += groupLogList.Count;
+                totalSourceEvents += groupLogList.Sum(log => log.Data.Count);
+                await InsertLogsWithRetryAsync(groupLogList, config, cancellationToken);
+            }
         }
 
         stopwatch.Stop();
@@ -282,15 +285,9 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
             {
                 using var scope = _serviceProvider.CreateScope();
                 var context = scope.ServiceProvider.GetRequiredService<EventLogContext>();
-                Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? transaction = null;
-                try
-                {
-                    transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "BeginTransactionAsync failed or was ignored by provider; proceeding without a transaction.");
-                }
+                await using var transaction = context.Database.IsRelational()
+                    ? await context.Database.BeginTransactionAsync(cancellationToken)
+                    : null;
                 var existingLogs = await GetExistingLogsAsync(context, batchLogs, cancellationToken);
                 if (existingLogs.Count != 0)
                 {
@@ -300,7 +297,6 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
                         batchLogs.Min(log => log.Start),
                         batchLogs.Max(log => log.End));
                     context.IndiannaEvents.RemoveRange(existingLogs);
-                    await context.SaveChangesAsync(cancellationToken);
                 }
 
                 context.IndiannaEvents.AddRange(batchLogs);

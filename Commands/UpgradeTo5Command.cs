@@ -42,9 +42,9 @@ public sealed class UpgradeTo5Command : Command, ICommandOption<UpgradeTo5Comman
         AddOption(SkipSpeedOption);
     }
 
-    public Option<string> SourceOption { get; } = new("--source", "Connection string for the ATSPM 4.3 SQL Server source") { IsRequired = true };
-    public Option<DateTime> StartOption { get; } = new("--start", "Start date/time for event and speed migration") { IsRequired = true };
-    public Option<DateTime> EndOption { get; } = new("--end", "Inclusive end; a date-only value includes the whole end day") { IsRequired = true };
+    public Option<string> SourceOption { get; } = new("--source", "Connection string for the ATSPM 4.3 SQL Server source; may also come from UpgradeTo5CommandConfiguration");
+    public Option<DateTime> StartOption { get; } = new("--start", "Start date/time for event and speed migration; may also come from UpgradeTo5CommandConfiguration");
+    public Option<DateTime> EndOption { get; } = new("--end", "Inclusive end; a date-only value includes the whole end day; may also come from UpgradeTo5CommandConfiguration");
     public Option<bool> DeleteOption { get; } = new("--delete", "Delete target configuration data before importing");
     public Option<bool> UpdateLocationsOption { get; } = new("--update-locations", () => true, "Import configuration and location data into the target (enabled by default)");
     public Option<bool> ImportSpeedDevicesOption { get; } = new("--update-speed", () => true, "Import speed-device configuration, not speed events (enabled by default)");
@@ -75,10 +75,13 @@ public sealed class UpgradeTo5Command : Command, ICommandOption<UpgradeTo5Comman
 
     public void BindCommandOptions(HostBuilderContext host, IServiceCollection services)
     {
-        var binder = GetOptionsBinder();
-        services.AddSingleton(binder);
-        services.AddSingleton(sp => (UpgradeTo5CommandConfiguration)binder.CreateInstance(host.GetInvocationContext().BindingContext)!);
-        services.AddSingleton<Microsoft.Extensions.Options.IOptions<UpgradeTo5CommandConfiguration>>(sp => Microsoft.Extensions.Options.Options.Create(sp.GetRequiredService<UpgradeTo5CommandConfiguration>()));
+        var rawEnd = host.GetInvocationContext().ParseResult.FindResultFor(EndOption)?.Tokens.LastOrDefault()?.Value
+            ?? host.Configuration.GetSection(nameof(UpgradeTo5CommandConfiguration))[nameof(UpgradeTo5CommandConfiguration.End)];
+        services.AddSingleton(GetOptionsBinder());
+        services.AddOptions<UpgradeTo5CommandConfiguration>().Bind(host.Configuration.GetSection(nameof(UpgradeTo5CommandConfiguration)));
+        services.AddOptions<UpgradeTo5CommandConfiguration>().BindCommandLine();
+        services.PostConfigure<UpgradeTo5CommandConfiguration>(options =>
+            options.EndIsDateOnly = MigrationDateRange.IsDateOnly(rawEnd));
         services.AddScoped<IConfigurationMigrationService, ConfigurationMigrationService>();
         services.AddScoped<IEventLogMigrationService, EventLogMigrationService>();
         services.AddScoped<ISpeedEventMigrationService, SpeedEventMigrationService>();
@@ -91,6 +94,7 @@ public sealed class UpgradeTo5CommandConfiguration
     public string Source { get; set; } = string.Empty;
     public DateTime Start { get; set; }
     public DateTime End { get; set; }
+    public bool EndIsDateOnly { get; set; }
     public bool Delete { get; set; }
     public bool UpdateLocations { get; set; } = true;
     public bool ImportSpeedDevices { get; set; } = true;

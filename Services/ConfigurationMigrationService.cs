@@ -54,6 +54,8 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
     private readonly IDeviceRepository _deviceRepository;
     private readonly IConfiguration _applicationConfiguration;
     private TransferConfigCommandConfiguration _config = new();
+    private CancellationToken _cancellationToken;
+    private IReadOnlyDictionary<string, int>? _latestLocationIds;
     internal Func<string, CancellationToken, Task> SourcePreflightAsync { get; set; } = ValidateSourceAsync;
 
     public ConfigurationMigrationService(
@@ -102,6 +104,8 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
     {
         cancellationToken.ThrowIfCancellationRequested();
         _config = options;
+        _cancellationToken = cancellationToken;
+        _latestLocationIds = null;
         if (_config.Delete && string.IsNullOrWhiteSpace(_config.Source))
         {
             throw new InvalidOperationException("A source connection string is required before target configuration can be deleted.");
@@ -113,10 +117,10 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             cancellationToken.ThrowIfCancellationRequested();
         }
 
-        EnsureTargetSchemaCompatibility();
+        await EnsureTargetSchemaCompatibilityAsync(cancellationToken);
         if (_config.Delete)
         {
-            DeleteConfigurationData();
+            await DeleteConfigurationDataAsync(cancellationToken);
         }
 
         // If no source connection string is provided (typical in unit tests),
@@ -132,23 +136,38 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         var columnMappings = GetColumnMappings(_applicationConfiguration);
         if (_config.UpdateLocations)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             SetDetectionTypeMesureType();
+            cancellationToken.ThrowIfCancellationRequested();
             ImportProducts(queries, columnMappings);
+            cancellationToken.ThrowIfCancellationRequested();
             ImportDeviceConfigurations(queries, columnMappings);
+            cancellationToken.ThrowIfCancellationRequested();
             ImportRegions(queries, columnMappings);
+            cancellationToken.ThrowIfCancellationRequested();
             ImportAreas(queries, columnMappings);
+            cancellationToken.ThrowIfCancellationRequested();
             ImportJurisdictions(queries, columnMappings);
+            cancellationToken.ThrowIfCancellationRequested();
             ImportLocations(queries, columnMappings);
+            cancellationToken.ThrowIfCancellationRequested();
             ImportApproaches(queries, columnMappings);
+            cancellationToken.ThrowIfCancellationRequested();
             ImportDetectors(queries, columnMappings);
+            cancellationToken.ThrowIfCancellationRequested();
             ImportRoutes(queries, columnMappings);
+            cancellationToken.ThrowIfCancellationRequested();
             ImportRouteLocations(queries, columnMappings);
+            cancellationToken.ThrowIfCancellationRequested();
             ImportDevices(queries, columnMappings);
+            cancellationToken.ThrowIfCancellationRequested();
             ResetSequences();
         }
         if (_config.ImportSpeedDevices)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ImportSpeedDevices(queries, columnMappings);
+            cancellationToken.ThrowIfCancellationRequested();
             ResetSequences();
         }
     }
@@ -201,6 +220,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
 
         foreach (string sequence in sequences)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             // Correctly format table name derived from sequence name
             string tableName = sequence.Replace("_Id_seq\"", "").Replace("\"", "");
 
@@ -245,18 +265,19 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         _logger.LogInformation($"Importing Speed Devices");
         var importedDevices = ImportData<Device>(queries["SpeedDevices"], columnMappings["SpeedDevices"]);
         var speedDeviceConfiguration = _deviceConfigurationRepository.GetList().First(dc => dc.Description == "Speed");
+        var latestLocationIds = GetLatestLocationIds();
         var validDevices = new List<Device>();
         foreach (var device in importedDevices)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             device.DeviceConfiguration = speedDeviceConfiguration;
-            var locationId = GetLatestLocationId(device.DeviceIdentifier);
-            if (locationId == null)
+            if (!latestLocationIds.TryGetValue(device.DeviceIdentifier, out var locationId))
             {
                 _logger.LogInformation($"Location not found for device {device.DeviceIdentifier}");
                 continue;
             }
 
-            device.LocationId = locationId.Value;
+            device.LocationId = locationId;
             validDevices.Add(device);
         }
 
@@ -284,6 +305,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
 
             foreach (var device in validDevices)
             {
+                _cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
                     if (existingDevices.TryGetValue(device.DeviceIdentifier, out var existingDevice))
@@ -458,6 +480,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
 
             for (int i = 0; i < batches; i++)
             {
+                _cancellationToken.ThrowIfCancellationRequested();
                 var batch = approaches.Skip(i * batchSize).Take(batchSize).ToList();
                 _approachRepository.AddRange(batch);
                 _logger.LogInformation($"Batch {i + 1}/{batches} imported ({batch.Count} approaches).");
@@ -467,7 +490,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         else
         {
-            var approachIds = _approachRepository.GetList().Select(a => a.Id).ToList();
+            var approachIds = _approachRepository.GetList().Select(a => a.Id).ToHashSet();
             var newApproaches = approaches.Where(a => !approachIds.Contains(a.Id)).ToList();
             if (newApproaches.Count != 0)
             {
@@ -491,9 +514,11 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         _logger.LogInformation($"Importing Devices");
         var importedDevices = ImportData<Device>(queries["Devices"], columnMappings["Devices"]);
         var configurations = _deviceConfigurationRepository.GetList().ToList();
+        var latestLocationIds = GetLatestLocationIds();
         var validDevices = new List<Device>();
         foreach (var device in importedDevices)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             var configuration = configurations.FirstOrDefault(c => c.Id == device.DeviceConfigurationId);
             if (configuration == null)
             {
@@ -501,15 +526,14 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
                 continue;
             }
 
-            var locationId = GetLatestLocationId(device.DeviceIdentifier);
-            if (locationId == null)
+            if (!latestLocationIds.TryGetValue(device.DeviceIdentifier, out var locationId))
             {
                 _logger.LogInformation($"Location not found for device {device.DeviceIdentifier}");
                 continue;
             }
 
             device.DeviceConfiguration = configuration;
-            device.LocationId = locationId.Value;
+            device.LocationId = locationId;
             validDevices.Add(device);
         }
 
@@ -529,6 +553,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
 
         foreach (var device in validDevices)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             if (existingDevices.TryGetValue(device.DeviceIdentifier, out var existingDevice))
             {
                 existingDevice.DeviceConfigurationId = device.DeviceConfigurationId;
@@ -576,8 +601,9 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             const int batchSize = 5000;
             for (int i = 0; i < detectors.Count; i += batchSize)
             {
+                _cancellationToken.ThrowIfCancellationRequested();
                 var batch = detectors.Skip(i).Take(batchSize).ToList();
-                WireDetectionTypes(batch, detectionTypes, detectionTypeDetectors);
+                WireDetectionTypesCore(batch, detectionTypes, detectionTypeDetectors, _cancellationToken);
                 _detectorRepository.AddRange(batch);
                 _logger.LogInformation($"Processed batch of {batch.Count} detectors");
             }
@@ -586,13 +612,13 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         else
         {
-            var detectorIds = _detectorRepository.GetList().Select(d => d.Id).ToList();
+            var detectorIds = _detectorRepository.GetList().Select(d => d.Id).ToHashSet();
             var newDetectors = detectors.Where(d => !detectorIds.Contains(d.Id)).ToList();
             if (newDetectors.Count != 0)
             {
                 try
                 {
-                    WireDetectionTypes(newDetectors, detectionTypes, detectionTypeDetectors);
+                    WireDetectionTypesCore(newDetectors, detectionTypes, detectionTypeDetectors, _cancellationToken);
                     _detectorRepository.AddRange(newDetectors);
                     _logger.LogInformation("Imported {Count} new detectors with detection-type mappings", newDetectors.Count);
                 }
@@ -610,8 +636,18 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         IReadOnlyCollection<DetectionType> detectionTypes,
         IReadOnlyCollection<DetectionTypeDetector> detectionTypeDetectors)
     {
+        WireDetectionTypesCore(detectors, detectionTypes, detectionTypeDetectors, CancellationToken.None);
+    }
+
+    private static void WireDetectionTypesCore(
+        IReadOnlyCollection<Detector> detectors,
+        IReadOnlyCollection<DetectionType> detectionTypes,
+        IReadOnlyCollection<DetectionTypeDetector> detectionTypeDetectors,
+        CancellationToken cancellationToken)
+    {
         foreach (var detectionType in detectionTypes)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var detectorIds = detectionType.Id == DetectionTypes.B
                 ? null
                 : detectionTypeDetectors
@@ -621,6 +657,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
 
             foreach (var detector in detectors.Where(detector => detectorIds == null || detectorIds.Contains(detector.Id)))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 detectionType.Detectors.Add(detector);
             }
         }
@@ -643,7 +680,8 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
 
         foreach (var area in areas)
         {
-            var locationIds = locationAreas.Where(l => l.AreasId == area.Id).Select(l => l.LocationsId).ToList();
+            _cancellationToken.ThrowIfCancellationRequested();
+            var locationIds = locationAreas.Where(l => l.AreasId == area.Id).Select(l => l.LocationsId).ToHashSet();
             foreach (var location in locations.Where(l => locationIds.Contains(l.Id)))
             {
                 location.Areas.Add(area);
@@ -664,7 +702,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         else
         {
-            var locationIds = _locationRepository.GetList().Select(l => l.Id).ToList();
+            var locationIds = _locationRepository.GetList().Select(l => l.Id).ToHashSet();
             var newLocations = locations.Where(l => !locationIds.Contains(l.Id)).ToList();
             if (newLocations.Count != 0)
             {
@@ -702,41 +740,48 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         var measureTypesForStopBarPresence = measureTypes.Where(m => new List<int> { 12, 31, 32 }.Contains(m.Id)).ToList();
         foreach (var detectionType in detectionTypes)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             switch (detectionType.Id)
             {
                 case DetectionTypes.B:
                     foreach (var measureType in measureTypesForBasic)
                     {
+                        _cancellationToken.ThrowIfCancellationRequested();
                         detectionType.MeasureTypes.Add(measureType);
                     }
                     break;
                 case DetectionTypes.AC:
                     foreach (var measureType in measureTypesForAdvanceCount)
                     {
+                        _cancellationToken.ThrowIfCancellationRequested();
                         detectionType.MeasureTypes.Add(measureType);
                     }
                     break;
                 case DetectionTypes.AS:
                     foreach (var measureType in measureTypesForAdvanceSpeed)
                     {
+                        _cancellationToken.ThrowIfCancellationRequested();
                         detectionType.MeasureTypes.Add(measureType);
                     }
                     break;
                 case DetectionTypes.LLC:
                     foreach (var measureType in measureTypesForLlc)
                     {
+                        _cancellationToken.ThrowIfCancellationRequested();
                         detectionType.MeasureTypes.Add(measureType);
                     }
                     break;
                 case DetectionTypes.LLS:
                     foreach (var measureType in measureTypesForLls)
                     {
+                        _cancellationToken.ThrowIfCancellationRequested();
                         detectionType.MeasureTypes.Add(measureType);
                     }
                     break;
                 case DetectionTypes.SBP:
                     foreach (var measureType in measureTypesForStopBarPresence)
                     {
+                        _cancellationToken.ThrowIfCancellationRequested();
                         detectionType.MeasureTypes.Add(measureType);
                     }
                     break;
@@ -791,31 +836,41 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
 
     }
 
-    private void DeleteConfigurationData()
+    private async Task DeleteConfigurationDataAsync(CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
         var configContext = scope.ServiceProvider.GetRequiredService<ConfigContext>();
-        using var transaction = configContext.Database.IsRelational()
-            ? configContext.Database.BeginTransaction()
+        await using var transaction = configContext.Database.IsRelational()
+            ? await configContext.Database.BeginTransactionAsync(cancellationToken)
             : null;
 
         _logger.LogInformation("Deleting the bounded target configuration set");
-        configContext.RemoveRange(configContext.Set<RouteLocation>());
-        configContext.RemoveRange(configContext.Set<Route>());
-        configContext.RemoveRange(configContext.Set<Device>());
-        configContext.RemoveRange(configContext.Set<Detector>());
-        configContext.RemoveRange(configContext.Set<Approach>());
-        configContext.RemoveRange(configContext.Set<Location>());
-        configContext.RemoveRange(configContext.Set<Area>());
-        configContext.RemoveRange(configContext.Set<Jurisdiction>());
-        configContext.RemoveRange(configContext.Set<Region>());
-        configContext.RemoveRange(configContext.Set<DeviceConfiguration>());
-        configContext.RemoveRange(configContext.Set<Product>());
-        configContext.SaveChanges();
-        transaction?.Commit();
+        await RemoveAllAsync<RouteLocation>(configContext, cancellationToken);
+        await RemoveAllAsync<Route>(configContext, cancellationToken);
+        await RemoveAllAsync<Device>(configContext, cancellationToken);
+        await RemoveAllAsync<Detector>(configContext, cancellationToken);
+        await RemoveAllAsync<Approach>(configContext, cancellationToken);
+        await RemoveAllAsync<Location>(configContext, cancellationToken);
+        await RemoveAllAsync<Area>(configContext, cancellationToken);
+        await RemoveAllAsync<Jurisdiction>(configContext, cancellationToken);
+        await RemoveAllAsync<Region>(configContext, cancellationToken);
+        await RemoveAllAsync<DeviceConfiguration>(configContext, cancellationToken);
+        await RemoveAllAsync<Product>(configContext, cancellationToken);
+        await configContext.SaveChangesAsync(cancellationToken);
+        if (transaction != null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
     }
 
-    private void EnsureTargetSchemaCompatibility()
+    private static async Task RemoveAllAsync<TEntity>(ConfigContext context, CancellationToken cancellationToken)
+        where TEntity : class
+    {
+        var entities = await context.Set<TEntity>().ToListAsync(cancellationToken);
+        context.RemoveRange(entities);
+    }
+
+    private async Task EnsureTargetSchemaCompatibilityAsync(CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
         var configContext = scope.ServiceProvider.GetRequiredService<ConfigContext>();
@@ -825,23 +880,37 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             return;
         }
 
-        var pendingMigrations = configContext.Database.GetPendingMigrations().ToList();
+        await RemoveLegacySyntheticMigrationHistoryAsync(configContext, cancellationToken);
+        var pendingMigrations = (await configContext.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
         if (pendingMigrations.Count > 0)
         {
             _logger.LogInformation(
                 "Applying {Count} pending PostgreSQL config migrations: {Migrations}",
                 pendingMigrations.Count,
                 string.Join(", ", pendingMigrations));
-            configContext.Database.Migrate();
+            await configContext.Database.MigrateAsync(cancellationToken);
         }
 
-        ApplyPostgreSqlConfig53MigrationBridge(configContext);
+        await ApplyPostgreSqlConfig53MigrationBridgeAsync(configContext, cancellationToken);
     }
 
-    private void ApplyPostgreSqlConfig53MigrationBridge(ConfigContext configContext)
+    internal const string RemoveLegacySyntheticMigrationHistorySql = """
+        DO $$
+        BEGIN
+            IF to_regclass('public."__EFMigrationsHistory"') IS NOT NULL THEN
+                DELETE FROM public."__EFMigrationsHistory"
+                WHERE "MigrationId" = '20260521163837_5_3'
+                    AND "ProductVersion" = '8.0.22';
+            END IF;
+        END $$;
+        """;
+
+    private async Task RemoveLegacySyntheticMigrationHistoryAsync(ConfigContext configContext, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Ensuring PostgreSQL config migration 20260521163837_5_3");
-        configContext.Database.ExecuteSqlRaw("""
+        await configContext.Database.ExecuteSqlRawAsync(RemoveLegacySyntheticMigrationHistorySql, cancellationToken);
+    }
+
+    internal const string PostgreSqlConfigCompatibilitySql = """
             DO $$
             DECLARE
                 target_table text;
@@ -910,64 +979,25 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
                     ALTER TABLE public."Approaches" ADD COLUMN "TransitSignalPriorityNumber" integer NULL;
                 END IF;
 
-                INSERT INTO public."__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-                VALUES ('20260521163837_5_3', '8.0.22')
-                ON CONFLICT ("MigrationId") DO NOTHING;
             END $$;
-            """);
+            """;
+
+    private async Task ApplyPostgreSqlConfig53MigrationBridgeAsync(ConfigContext configContext, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Ensuring PostgreSQL config migration 20260521163837_5_3 compatibility");
+        await configContext.Database.ExecuteSqlRawAsync(PostgreSqlConfigCompatibilitySql, cancellationToken);
     }
 
-    private int? GetLatestLocationId(string locationIdentifier)
+    private IReadOnlyDictionary<string, int> GetLatestLocationIds()
     {
-        using var scope = _serviceProvider.CreateScope();
-        var configContext = scope.ServiceProvider.GetRequiredService<ConfigContext>();
-
-        if (configContext.Database.ProviderName != "Npgsql.EntityFrameworkCore.PostgreSQL")
-        {
-            return _locationRepository.GetLatestVersionOfLocation(locationIdentifier)?.Id;
-        }
-
-        var connection = configContext.Database.GetDbConnection();
-        var shouldCloseConnection = connection.State != ConnectionState.Open;
-        if (shouldCloseConnection)
-        {
-            connection.Open();
-        }
-
-        try
-        {
-            using var command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT "Id"
-                FROM public."Locations"
-                WHERE "LocationIdentifier" = @locationIdentifier
-                    AND "VersionAction" <> @deleteVersionAction
-                ORDER BY "Start" DESC, "Id" DESC
-                LIMIT 1;
-                """;
-
-            var locationIdentifierParameter = command.CreateParameter();
-            locationIdentifierParameter.ParameterName = "@locationIdentifier";
-            locationIdentifierParameter.Value = locationIdentifier;
-            command.Parameters.Add(locationIdentifierParameter);
-
-            var deleteVersionActionParameter = command.CreateParameter();
-            deleteVersionActionParameter.ParameterName = "@deleteVersionAction";
-            deleteVersionActionParameter.Value = (int)LocationVersionActions.Delete;
-            command.Parameters.Add(deleteVersionActionParameter);
-
-            var result = command.ExecuteScalar();
-            return result == null || result == DBNull.Value
-                ? null
-                : Convert.ToInt32(result);
-        }
-        finally
-        {
-            if (shouldCloseConnection)
-            {
-                connection.Close();
-            }
-        }
+        return _latestLocationIds ??= _locationRepository.GetList()
+            .Where(location => location.VersionAction != LocationVersionActions.Delete)
+            .AsEnumerable()
+            .GroupBy(location => location.LocationIdentifier, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderByDescending(location => location.Start).ThenByDescending(location => location.Id).First().Id,
+                StringComparer.OrdinalIgnoreCase);
     }
 
 
@@ -982,13 +1012,14 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
 
         using (var sourceConnection = new SqlConnection(_config.Source))
         {
-            sourceConnection.Open();
+            sourceConnection.OpenAsync(_cancellationToken).GetAwaiter().GetResult();
             using (SqlCommand sourceCommand = CreateSourceCommand(query, sourceConnection))
             {
-                using (SqlDataReader reader = sourceCommand.ExecuteReader())
+                using (SqlDataReader reader = sourceCommand.ExecuteReaderAsync(_cancellationToken).GetAwaiter().GetResult())
                 {
-                    while (reader.Read())
+                    while (reader.ReadAsync(_cancellationToken).GetAwaiter().GetResult())
                     {
+                        _cancellationToken.ThrowIfCancellationRequested();
                         var entity = new T(); // Create an instance of the generic type
 
                         // Iterate through column mappings

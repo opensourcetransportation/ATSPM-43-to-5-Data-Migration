@@ -42,7 +42,8 @@ public sealed class MigrationDateRangeTests
     {
         var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(
             new DateTime(2024, 1, 1, 0, 0, 0),
-            new DateTime(2024, 1, 7, 0, 0, 0));
+            new DateTime(2024, 1, 7, 0, 0, 0),
+            endIsDateOnly: true);
 
         Assert.Equal(new DateTime(2024, 1, 8, 0, 0, 0), endExclusive);
     }
@@ -56,7 +57,7 @@ public sealed class MigrationDateRangeTests
             new DateTime(2024, 1, 1, 0, 0, 0),
             endInclusive);
 
-        Assert.Equal(endInclusive.AddSeconds(1), endExclusive);
+        Assert.Equal(endInclusive.AddTicks(1), endExclusive);
     }
 
     [Fact]
@@ -69,5 +70,27 @@ public sealed class MigrationDateRangeTests
             endInclusive);
 
         Assert.Equal(endInclusive.AddTicks(1), endExclusive);
+    }
+
+    [Fact]
+    public void NormalizeInclusiveEndToExclusive_ExplicitMidnightAddsOnlyOneTick()
+    {
+        var endInclusive = new DateTime(2024, 1, 2, 0, 0, 0);
+
+        var endExclusive = MigrationDateRange.NormalizeInclusiveEndToExclusive(
+            new DateTime(2024, 1, 1, 0, 0, 0),
+            endInclusive,
+            endIsDateOnly: false);
+
+        Assert.Equal(endInclusive.AddTicks(1), endExclusive);
+    }
+
+    [Theory]
+    [InlineData("2024-01-02", true)]
+    [InlineData("2024-01-02T00:00:00", false)]
+    [InlineData("2024-01-02 00:00:00", false)]
+    public void IsDateOnly_DistinguishesDateOnlyFromExplicitMidnight(string value, bool expected)
+    {
+        Assert.Equal(expected, MigrationDateRange.IsDateOnly(value));
     }
 }

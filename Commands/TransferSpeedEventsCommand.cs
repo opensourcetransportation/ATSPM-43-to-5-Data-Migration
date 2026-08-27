@@ -51,9 +51,13 @@ public sealed class TransferSpeedEventsCommand : Command, ICommandOption<Migrati
 
     public void BindCommandOptions(HostBuilderContext host, IServiceCollection services)
     {
+        var rawEnd = host.GetInvocationContext().ParseResult.FindResultFor(EndOption)?.Tokens.LastOrDefault()?.Value
+            ?? host.Configuration.GetSection(nameof(MigrationCommandConfiguration))[nameof(MigrationCommandConfiguration.End)];
         services.AddSingleton(GetOptionsBinder());
         services.AddOptions<MigrationCommandConfiguration>().Bind(host.Configuration.GetSection(nameof(MigrationCommandConfiguration)));
         services.AddOptions<MigrationCommandConfiguration>().BindCommandLine();
+        services.PostConfigure<MigrationCommandConfiguration>(options =>
+            options.EndIsDateOnly = MigrationDateRange.IsDateOnly(rawEnd));
         services.AddScoped<ISpeedEventMigrationService, SpeedEventMigrationService>();
         services.AddHostedService<TransferSpeedEventsHostedService>();
     }

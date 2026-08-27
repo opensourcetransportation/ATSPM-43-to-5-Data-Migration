@@ -55,6 +55,29 @@ namespace DataMigrator.Tests
         }
 
         [Fact]
+        public void BuildSpeedEventQuery_RejectsMoreThanSqlServerSafeDetectorLimit()
+        {
+            var method = typeof(SpeedEventMigrationService).GetMethod("BuildSpeedEventQuery", BindingFlags.NonPublic | BindingFlags.Static);
+
+            var exception = Assert.Throws<TargetInvocationException>(() =>
+                method!.Invoke(null, new object[] { SpeedEventMigrationService.MaxDetectorParametersPerQuery + 1 }));
+
+            Assert.IsType<ArgumentOutOfRangeException>(exception.InnerException);
+        }
+
+        [Fact]
+        public void ChunkDetectorIdentifiers_StaysBelowSqlServerParameterLimit()
+        {
+            var detectorIds = Enumerable.Range(0, 4501).Select(index => index.ToString()).ToArray();
+
+            var chunks = SpeedEventMigrationService.ChunkDetectorIdentifiers(detectorIds).ToList();
+
+            Assert.Equal(3, chunks.Count);
+            Assert.All(chunks, chunk => Assert.InRange(chunk.Length, 1, SpeedEventMigrationService.MaxDetectorParametersPerQuery));
+            Assert.Equal(detectorIds, chunks.SelectMany(chunk => chunk));
+        }
+
+        [Fact]
         public void BuildSourceConnectionString_NormalizesQuotesAndTimeout()
         {
             var method = typeof(SpeedEventMigrationService).GetMethod("BuildSourceConnectionString", BindingFlags.NonPublic | BindingFlags.Static);

@@ -88,6 +88,7 @@ public sealed class UpgradeTo5HostedService : IHostedService
                     Source = _options.Source,
                     Start = _options.Start,
                     End = _options.End,
+                    EndIsDateOnly = _options.EndIsDateOnly,
                     Batch = _options.Batch,
                     Device = _options.Device,
                     Locations = _options.Locations
@@ -104,6 +105,7 @@ public sealed class UpgradeTo5HostedService : IHostedService
                     Source = _options.Source,
                     Start = _options.Start,
                     End = _options.End,
+                    EndIsDateOnly = _options.EndIsDateOnly,
                     Locations = _options.Locations
                 }, token),
                 cancellationToken);

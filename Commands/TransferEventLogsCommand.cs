@@ -57,9 +57,13 @@ public sealed class TransferEventsCommand : Command, ICommandOption<MigrationCom
 
     public void BindCommandOptions(HostBuilderContext host, IServiceCollection services)
     {
+        var rawEnd = host.GetInvocationContext().ParseResult.FindResultFor(EndOption)?.Tokens.LastOrDefault()?.Value
+            ?? host.Configuration.GetSection(nameof(MigrationCommandConfiguration))[nameof(MigrationCommandConfiguration.End)];
         services.AddSingleton(GetOptionsBinder());
         services.AddOptions<MigrationCommandConfiguration>().Bind(host.Configuration.GetSection(nameof(MigrationCommandConfiguration)));
         services.AddOptions<MigrationCommandConfiguration>().BindCommandLine();
+        services.PostConfigure<MigrationCommandConfiguration>(options =>
+            options.EndIsDateOnly = MigrationDateRange.IsDateOnly(rawEnd));
         services.AddScoped<IEventLogMigrationService, EventLogMigrationService>();
         services.AddHostedService<TransferEventLogsHostedService>();
     }
@@ -70,6 +74,7 @@ public sealed class MigrationCommandConfiguration
     public string Source { get; set; } = string.Empty;
     public DateTime Start { get; set; }
     public DateTime End { get; set; }
+    public bool EndIsDateOnly { get; set; }
     public int? Device { get; set; }
     public int? Batch { get; set; }
     public string? Locations { get; set; }

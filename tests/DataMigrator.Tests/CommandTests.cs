@@ -63,13 +63,13 @@ public sealed class CommandTests
     }
 
     [Fact]
-    public void UpgradeCommand_RequiresSourceStartAndEnd()
+    public void UpgradeCommand_AllowsSourceStartAndEndFromConfiguration()
     {
         var command = new UpgradeTo5Command();
 
-        Assert.True(command.SourceOption.IsRequired);
-        Assert.True(command.StartOption.IsRequired);
-        Assert.True(command.EndOption.IsRequired);
+        Assert.False(command.SourceOption.IsRequired);
+        Assert.False(command.StartOption.IsRequired);
+        Assert.False(command.EndOption.IsRequired);
         Assert.False(command.SkipConfigOption.IsRequired);
         Assert.False(command.SkipEventsOption.IsRequired);
         Assert.False(command.SkipSpeedOption.IsRequired);
