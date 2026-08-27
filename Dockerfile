@@ -15,7 +15,7 @@ COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "DataMigrator.dll"]
 
 LABEL org.opencontainers.image.title="ATSPM DataMigrator"
-LABEL org.opencontainers.image.description="Utility for migrating ATSPM 4.3 data into ATSPM 5.2"
+LABEL org.opencontainers.image.description="Utility for migrating ATSPM 4.3 data into ATSPM 5"
 LABEL org.opencontainers.image.vendor="OpenSourceTransportation"
 LABEL org.opencontainers.image.source="https://github.com/opensourcetransportation/ATSPM-43-to-5-Data-Migration"
 LABEL org.opencontainers.image.documentation="https://github.com/opensourcetransportation/ATSPM-43-to-5-Data-Migration/tree/main/docs"

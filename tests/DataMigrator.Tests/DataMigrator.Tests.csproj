@@ -23,10 +23,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\DataMigrator.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <Compile Remove="TransferSpeedEventsHostedServiceTests.cs" />
-    <Compile Remove="TransferSpeedEventsHostedServiceIntegrationTests.cs" />
-  </ItemGroup>
 </Project>
 
 

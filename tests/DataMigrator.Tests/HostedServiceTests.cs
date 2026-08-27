@@ -99,8 +99,8 @@ public sealed class HostedServiceTests
         var configRecorder = new RecordingConfigurationMigrationService(invocations);
         var eventRecorder = new RecordingEventLogMigrationService(invocations);
         var speedRecorder = new RecordingSpeedEventMigrationService(invocations);
-        var logger = new RecordingLogger<UpgradeTo52HostedService>();
-        var options = Options.Create(new UpgradeTo52CommandConfiguration
+        var logger = new RecordingLogger<UpgradeTo5HostedService>();
+        var options = Options.Create(new UpgradeTo5CommandConfiguration
         {
             Source = "source",
             Start = new DateTime(2024, 2, 1),
@@ -112,7 +112,7 @@ public sealed class HostedServiceTests
             Device = 3,
             Locations = "A1,B2"
         });
-        var service = new UpgradeTo52HostedService(
+        var service = new UpgradeTo5HostedService(
             logger,
             configRecorder,
             eventRecorder,
@@ -142,7 +142,7 @@ public sealed class HostedServiceTests
         Assert.Contains(logger.Messages, message => message.Contains("Completed configuration migration in", StringComparison.Ordinal));
         Assert.Contains(logger.Messages, message => message.Contains("Completed event log migration in", StringComparison.Ordinal));
         Assert.Contains(logger.Messages, message => message.Contains("Completed speed event migration in", StringComparison.Ordinal));
-        Assert.Contains(logger.Messages, message => message.Contains("Upgrade-to-5-2 orchestration completed in", StringComparison.Ordinal));
+        Assert.Contains(logger.Messages, message => message.Contains("Upgrade-to-5 orchestration completed in", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public sealed class HostedServiceTests
         var configRecorder = new RecordingConfigurationMigrationService(invocations);
         var eventRecorder = new RecordingEventLogMigrationService(invocations);
         var speedRecorder = new RecordingSpeedEventMigrationService(invocations);
-        var options = Options.Create(new UpgradeTo52CommandConfiguration
+        var options = Options.Create(new UpgradeTo5CommandConfiguration
         {
             Source = "source",
             Start = new DateTime(2024, 3, 1),
@@ -160,8 +160,8 @@ public sealed class HostedServiceTests
             SkipConfig = true,
             SkipSpeed = true
         });
-        var service = new UpgradeTo52HostedService(
-            NullLogger<UpgradeTo52HostedService>.Instance,
+        var service = new UpgradeTo5HostedService(
+            NullLogger<UpgradeTo5HostedService>.Instance,
             configRecorder,
             eventRecorder,
             speedRecorder,
@@ -179,12 +179,12 @@ public sealed class HostedServiceTests
     public async Task UpgradeHostedService_RespectsSkipConfigAndSkipEvents()
     {
         var invocations = new List<string>();
-        var service = new UpgradeTo52HostedService(
-            NullLogger<UpgradeTo52HostedService>.Instance,
+        var service = new UpgradeTo5HostedService(
+            NullLogger<UpgradeTo5HostedService>.Instance,
             new RecordingConfigurationMigrationService(invocations),
             new RecordingEventLogMigrationService(invocations),
             new RecordingSpeedEventMigrationService(invocations),
-            Options.Create(new UpgradeTo52CommandConfiguration
+            Options.Create(new UpgradeTo5CommandConfiguration
             {
                 Source = "source",
                 Start = new DateTime(2024, 4, 1),
@@ -202,12 +202,12 @@ public sealed class HostedServiceTests
     public async Task UpgradeHostedService_RespectsSkipEventsAndSkipSpeed()
     {
         var invocations = new List<string>();
-        var service = new UpgradeTo52HostedService(
-            NullLogger<UpgradeTo52HostedService>.Instance,
+        var service = new UpgradeTo5HostedService(
+            NullLogger<UpgradeTo5HostedService>.Instance,
             new RecordingConfigurationMigrationService(invocations),
             new RecordingEventLogMigrationService(invocations),
             new RecordingSpeedEventMigrationService(invocations),
-            Options.Create(new UpgradeTo52CommandConfiguration
+            Options.Create(new UpgradeTo5CommandConfiguration
             {
                 Source = "source",
                 Start = new DateTime(2024, 5, 1),
@@ -225,13 +225,13 @@ public sealed class HostedServiceTests
     public async Task UpgradeHostedService_StopsAfterConfigurationFailure()
     {
         var invocations = new List<string>();
-        var logger = new RecordingLogger<UpgradeTo52HostedService>();
-        var service = new UpgradeTo52HostedService(
+        var logger = new RecordingLogger<UpgradeTo5HostedService>();
+        var service = new UpgradeTo5HostedService(
             logger,
             new ThrowingConfigurationMigrationService(invocations, new InvalidOperationException("config failed")),
             new RecordingEventLogMigrationService(invocations),
             new RecordingSpeedEventMigrationService(invocations),
-            Options.Create(new UpgradeTo52CommandConfiguration
+            Options.Create(new UpgradeTo5CommandConfiguration
             {
                 Source = "source",
                 Start = new DateTime(2024, 6, 1),
@@ -249,13 +249,13 @@ public sealed class HostedServiceTests
     public async Task UpgradeHostedService_StopsAfterEventFailure()
     {
         var invocations = new List<string>();
-        var logger = new RecordingLogger<UpgradeTo52HostedService>();
-        var service = new UpgradeTo52HostedService(
+        var logger = new RecordingLogger<UpgradeTo5HostedService>();
+        var service = new UpgradeTo5HostedService(
             logger,
             new RecordingConfigurationMigrationService(invocations),
             new ThrowingEventLogMigrationService(invocations, new InvalidOperationException("events failed")),
             new RecordingSpeedEventMigrationService(invocations),
-            Options.Create(new UpgradeTo52CommandConfiguration
+            Options.Create(new UpgradeTo5CommandConfiguration
             {
                 Source = "source",
                 Start = new DateTime(2024, 7, 1),

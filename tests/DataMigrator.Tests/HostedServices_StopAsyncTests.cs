@@ -33,9 +33,9 @@ namespace DataMigrator.Tests
         }
 
         [Fact]
-        public async Task UpgradeTo52HostedService_StopAsync_Completes()
+        public async Task UpgradeTo5HostedService_StopAsync_Completes()
         {
-            var svc = new UpgradeTo52HostedService(NullLogger<UpgradeTo52HostedService>.Instance, new Mock<IConfigurationMigrationService>().Object, new Mock<IEventLogMigrationService>().Object, new Mock<ISpeedEventMigrationService>().Object, Options.Create(new UpgradeTo52CommandConfiguration()));
+            var svc = new UpgradeTo5HostedService(NullLogger<UpgradeTo5HostedService>.Instance, new Mock<IConfigurationMigrationService>().Object, new Mock<IEventLogMigrationService>().Object, new Mock<ISpeedEventMigrationService>().Object, Options.Create(new UpgradeTo5CommandConfiguration()));
             await svc.StopAsync(CancellationToken.None);
         }
     }

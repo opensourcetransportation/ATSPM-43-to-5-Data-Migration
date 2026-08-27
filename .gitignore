@@ -37,6 +37,7 @@ packages/
 # .NET tooling
 project.lock.json
 project.fragment.lock.json
+*.lscache
 artifacts/
 
 # Logs

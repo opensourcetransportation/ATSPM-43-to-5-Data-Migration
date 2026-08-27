@@ -26,7 +26,7 @@ namespace DataMigrator.Commands;
 
 public sealed class TransferEventsCommand : Command, ICommandOption<MigrationCommandConfiguration>
 {
-    public TransferEventsCommand() : base("transfer-events", "Move ATSPM 4.3 event log data from SQL Server into the configured ATSPM 5.2 target")
+    public TransferEventsCommand() : base("transfer-events", "Move ATSPM 4.3 event log data from SQL Server into the configured ATSPM 5 target")
     {
         AddOption(SourceOption);
         AddOption(StartOption);
@@ -38,9 +38,9 @@ public sealed class TransferEventsCommand : Command, ICommandOption<MigrationCom
 
     public Option<string> SourceOption { get; } = new("--source", "Connection string for the ATSPM 4.3 SQL Server source") { IsRequired = true };
     public Option<DateTime> StartOption { get; } = new("--start", "Start date/time for the event transfer") { IsRequired = true };
-    public Option<DateTime> EndOption { get; } = new("--end", "End date/time for the event transfer") { IsRequired = true };
+    public Option<DateTime> EndOption { get; } = new("--end", "Inclusive end date/time; use 23:59:59 to include a whole end day") { IsRequired = true };
     public Option<int?> BatchOption { get; } = new("--batch", "Batch size for inserting compressed event log records") { IsRequired = false };
-    public Option<int?> DeviceOption { get; } = new("--device", "Limit transfer to one ATSPM device type id") { IsRequired = false };
+    public Option<int?> DeviceOption { get; } = new("--device", "Limit location selection to one ATSPM DeviceTypes integer; normally omit") { IsRequired = false };
     public Option<string> LocationsOption { get; } = new("--locations", "Comma-separated list of location identifiers") { IsRequired = false };
 
     public ModelBinder<MigrationCommandConfiguration> GetOptionsBinder()

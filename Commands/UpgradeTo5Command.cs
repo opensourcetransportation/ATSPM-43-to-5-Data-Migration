@@ -1,6 +1,6 @@
 #region license
 // Copyright 2026 Utah Departement of Transportation
-// for DataMigrator - DataMigrator.Commands/UpgradeTo52Command.cs
+// for DataMigrator - DataMigrator.Commands/UpgradeTo5Command.cs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,9 +24,9 @@ using System.CommandLine.NamingConventionBinder;
 
 namespace DataMigrator.Commands;
 
-public sealed class UpgradeTo52Command : Command, ICommandOption<UpgradeTo52CommandConfiguration>
+public sealed class UpgradeTo5Command : Command, ICommandOption<UpgradeTo5CommandConfiguration>
 {
-    public UpgradeTo52Command() : base("upgrade-to-5-2", "Run the standard ATSPM 4.3 to 5.2 migration sequence")
+    public UpgradeTo5Command() : base("upgrade-to-5", "Run the standard ATSPM 4.3 to ATSPM 5 migration sequence")
     {
         AddOption(SourceOption);
         AddOption(StartOption);
@@ -44,20 +44,20 @@ public sealed class UpgradeTo52Command : Command, ICommandOption<UpgradeTo52Comm
 
     public Option<string> SourceOption { get; } = new("--source", "Connection string for the ATSPM 4.3 SQL Server source") { IsRequired = true };
     public Option<DateTime> StartOption { get; } = new("--start", "Start date/time for event and speed migration") { IsRequired = true };
-    public Option<DateTime> EndOption { get; } = new("--end", "End date/time for event and speed migration") { IsRequired = true };
+    public Option<DateTime> EndOption { get; } = new("--end", "Inclusive end date/time; use 23:59:59 to include a whole event end day") { IsRequired = true };
     public Option<bool> DeleteOption { get; } = new("--delete", "Delete target configuration data before importing");
-    public Option<bool> UpdateLocationsOption { get; } = new("--update-locations", () => true, "Import configuration and location data into the target");
-    public Option<bool> ImportSpeedDevicesOption { get; } = new("--update-speed", () => true, "Import speed-device configuration into the target");
+    public Option<bool> UpdateLocationsOption { get; } = new("--update-locations", () => true, "Import configuration and location data into the target (enabled by default)");
+    public Option<bool> ImportSpeedDevicesOption { get; } = new("--update-speed", () => true, "Import speed-device configuration, not speed events (enabled by default)");
     public Option<int?> BatchOption { get; } = new("--batch", "Batch size for inserting compressed event log records") { IsRequired = false };
-    public Option<int?> DeviceOption { get; } = new("--device", "Limit event migration to one ATSPM device type id") { IsRequired = false };
+    public Option<int?> DeviceOption { get; } = new("--device", "Limit event location selection to one ATSPM DeviceTypes integer; normally omit") { IsRequired = false };
     public Option<string> LocationsOption { get; } = new("--locations", "Comma-separated list of location identifiers") { IsRequired = false };
     public Option<bool> SkipConfigOption { get; } = new("--skip-config", "Skip configuration migration");
     public Option<bool> SkipEventsOption { get; } = new("--skip-events", "Skip event log migration");
     public Option<bool> SkipSpeedOption { get; } = new("--skip-speed", "Skip speed-event migration");
 
-    public ModelBinder<UpgradeTo52CommandConfiguration> GetOptionsBinder()
+    public ModelBinder<UpgradeTo5CommandConfiguration> GetOptionsBinder()
     {
-        var binder = new ModelBinder<UpgradeTo52CommandConfiguration>();
+        var binder = new ModelBinder<UpgradeTo5CommandConfiguration>();
         binder.BindMemberFromValue(c => c.Source, SourceOption);
         binder.BindMemberFromValue(c => c.Start, StartOption);
         binder.BindMemberFromValue(c => c.End, EndOption);
@@ -77,16 +77,16 @@ public sealed class UpgradeTo52Command : Command, ICommandOption<UpgradeTo52Comm
     {
         var binder = GetOptionsBinder();
         services.AddSingleton(binder);
-        services.AddSingleton(sp => (UpgradeTo52CommandConfiguration)binder.CreateInstance(host.GetInvocationContext().BindingContext)!);
-        services.AddSingleton<Microsoft.Extensions.Options.IOptions<UpgradeTo52CommandConfiguration>>(sp => Microsoft.Extensions.Options.Options.Create(sp.GetRequiredService<UpgradeTo52CommandConfiguration>()));
+        services.AddSingleton(sp => (UpgradeTo5CommandConfiguration)binder.CreateInstance(host.GetInvocationContext().BindingContext)!);
+        services.AddSingleton<Microsoft.Extensions.Options.IOptions<UpgradeTo5CommandConfiguration>>(sp => Microsoft.Extensions.Options.Options.Create(sp.GetRequiredService<UpgradeTo5CommandConfiguration>()));
         services.AddSingleton<IConfigurationMigrationService, ConfigurationMigrationService>();
         services.AddSingleton<IEventLogMigrationService, EventLogMigrationService>();
         services.AddSingleton<ISpeedEventMigrationService, SpeedEventMigrationService>();
-        services.AddHostedService<UpgradeTo52HostedService>();
+        services.AddHostedService<UpgradeTo5HostedService>();
     }
 }
 
-public sealed class UpgradeTo52CommandConfiguration
+public sealed class UpgradeTo5CommandConfiguration
 {
     public string Source { get; set; } = string.Empty;
     public DateTime Start { get; set; }
@@ -101,6 +101,4 @@ public sealed class UpgradeTo52CommandConfiguration
     public bool SkipEvents { get; set; }
     public bool SkipSpeed { get; set; }
 }
-
-
 

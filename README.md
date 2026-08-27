@@ -1,32 +1,30 @@
-# ATSPM-43-to-5-Data-Migration
+# ATSPM 4.3 to 5 Data Migration
 
-`DataMigrator` is a .NET 8 utility for moving ATSPM 4.3 data from SQL Server into an ATSPM 5.2 environment.
+`DataMigrator` is a .NET 8 utility for moving data from an ATSPM 4.3 SQL Server database into a configured ATSPM 5 environment.
 
-## What It Does
+## What It Migrates
 
-- Migrates configuration data from ATSPM 4.3 SQL Server into a configured ATSPM 5.2 target
-- Migrates controller event logs into the configured ATSPM 5.2 event-log store
-- Migrates speed events into the configured ATSPM 5.2 event-log store
-- Provides a guided `upgrade-to-5-2` command for the standard upgrade flow
+- Configuration: locations, approaches, detectors, devices, areas, routes, and related records
+- Controller event logs from `dbo.Controller_Event_Log`
+- Speed events from `dbo.Speed_Events`
+- All three phases through the guided `upgrade-to-5` command
 
-## Source And Target Rules
+The source is always ATSPM 4.3 on SQL Server. The target provider and database are selected through the ATSPM connection-string configuration.
 
-- Source is always ATSPM 4.3 on SQL Server
-- Target provider is determined by your configured ATSPM 5.2 connection strings and provider settings
-- No target database provider is assumed by default
+## Before You Run It
 
-## Prerequisites
+- Download the published Windows executable, use the container image, or install the [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8) to build from source.
+- Confirm network access to both databases.
+- Give the source login `SELECT` access to the ATSPM 4.3 objects being migrated.
+- Give the target login read/write access. PostgreSQL configuration migration also requires permission to apply EF migrations and alter the configuration schema.
+- Back up the target configuration database before using `--delete`. That option removes existing target configuration before importing it again.
+- Start with one known location and a short time range before running a production-sized migration.
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8) (for source builds) or the published Windows EXE from GitHub Releases
-- Network access to the ATSPM 4.3 SQL Server source database
-- A running ATSPM 5.2 environment with the target database schema already applied
-- Connection strings and provider name for the ATSPM 5.2 target
+See [Configuration](docs/configuration.md) for connection strings, provider names, permissions, and schema behavior.
 
-## Getting Started
+## 1. Configure the Target
 
-### 1. Configure the target database
-
-Open `appsettings.json` and fill in the connection strings for your ATSPM 5.2 target. Set `Provider` to match your database engine (`PostgreSql`, `SqlServer`, `MySql`, or `Oracle`).
+Set at least `ConfigContext` for configuration migration and `EventLogContext` for event or speed migration:
 
 ```json
 "ConnectionStrings": {
@@ -41,63 +39,61 @@ Open `appsettings.json` and fill in the connection strings for your ATSPM 5.2 ta
 }
 ```
 
-For sensitive environments use [.NET User Secrets](https://learn.microsoft.com/en-us/aspnet/core/security/app-secrets) or environment variables instead of editing `appsettings.json` directly.
+Documented production target provider names are `PostgreSql`, `SqlServer`, `MySql`, and `Oracle`. Do not commit credentials; use environment variables or another supported .NET configuration source in production.
 
-### 2. Migrate configuration
-
-Run this first. It imports locations, devices, approaches, detectors, and all related configuration from ATSPM 4.3 into the ATSPM 5.2 target. Use `--delete` to start from a clean slate.
+## 2. Migrate Configuration
 
 ```powershell
 dotnet run --project . -- transfer-config `
-  --source "Server=sql01;Database=ATSPM;User Id=sa;Password=..." `
-  --delete
+  --source "Server=sql01;Database=MOE;User Id=...;Password=..."
 ```
 
-### 3. Migrate event logs
+For a clean replacement, first take a backup and then add `--delete`.
 
-Choose a date range. Events are processed in one-hour windows and reruns are safe — existing windows are replaced rather than duplicated.
+## 3. Validate a Small Event Slice
+
+Event start and end values are inclusive. For a whole day, specify the end of the day explicitly:
 
 ```powershell
 dotnet run --project . -- transfer-events `
-  --source "Server=sql01;Database=ATSPM;User Id=sa;Password=..." `
+  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
   --start 2024-01-01T00:00:00 `
-  --end 2024-01-07T23:59:59
+  --end 2024-01-01T23:59:59 `
+  --locations 1234
 ```
 
-### 4. Migrate speed events (if applicable)
+Events are processed in hourly windows. Rerunning the same windows replaces matching compressed records instead of intentionally appending duplicates.
 
-Use date-only values for start and end. The full end date is included automatically.
+## 4. Migrate Speed Events
+
+For speed migration, a date-only end value includes that entire date:
 
 ```powershell
 dotnet run --project . -- transfer-speed `
-  --source "Server=sql01;Database=ATSPM;User Id=sa;Password=..." `
+  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
   --start 2024-01-01 `
-  --end 2024-01-07
+  --end 2024-01-07 `
+  --locations 1234
 ```
 
-### 5. Or run all three steps at once
+## 5. Run the Combined Workflow
+
+After validating each phase, the combined command runs configuration, controller events, and speed events in sequence:
 
 ```powershell
-dotnet run --project . -- upgrade-to-5-2 `
-  --source "Server=sql01;Database=ATSPM;User Id=sa;Password=..." `
+dotnet run --project . -- upgrade-to-5 `
+  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
   --start 2024-01-01T00:00:00 `
   --end 2024-01-07T23:59:59
 ```
 
-## Quick Start (Summary)
-
-```powershell
-dotnet run --project . -- transfer-config --source "<sql-server-connection>"
-dotnet run --project . -- transfer-events --source "<sql-server-connection>" --start 2024-01-01 --end 2024-01-07
-dotnet run --project . -- upgrade-to-5-2 --source "<sql-server-connection>" --start 2024-01-01 --end 2024-01-07
-```
+Use `--skip-config`, `--skip-events`, or `--skip-speed` to omit a phase. Run `dotnet run --project . -- <command> --help` (or `DataMigrator.exe <command> --help`) for CLI help.
 
 ## Documentation
 
 - [Installation](docs/installation.md)
-- [Configuration](docs/configuration.md)
-- [Usage](docs/usage.md)
-- [Upgrade Guide](docs/upgrade-guide.md)
+- [Configuration and permissions](docs/configuration.md)
+- [Commands and option reference](docs/usage.md)
+- [Production upgrade and validation guide](docs/upgrade-guide.md)
 - [Troubleshooting](docs/troubleshooting.md)
-- [Design](docs/design/data-migrator-extraction-plan.md)
-
+- [Implementation history and design notes](docs/design/data-migrator-extraction-plan.md)

@@ -21,16 +21,16 @@ namespace DataMigrator.Commands;
 
 public sealed class DataMigratorCommands : RootCommand
 {
-    public DataMigratorCommands() : base("DataMigrator utility for ATSPM 4.3 to 5.2 upgrades")
+    public DataMigratorCommands() : base("DataMigrator utility for moving ATSPM 4.3 data into a configured ATSPM 5 target")
     {
         AddCommand(TransferConfigCommand);
         AddCommand(TransferEventsCommand);
         AddCommand(TransferSpeedCommand);
-        AddCommand(UpgradeTo52Command);
+        AddCommand(UpgradeTo5Command);
     }
 
     public TransferConfigCommand TransferConfigCommand { get; } = new();
     public TransferEventsCommand TransferEventsCommand { get; } = new();
     public TransferSpeedEventsCommand TransferSpeedCommand { get; } = new();
-    public UpgradeTo52Command UpgradeTo52Command { get; } = new();
+    public UpgradeTo5Command UpgradeTo5Command { get; } = new();
 }

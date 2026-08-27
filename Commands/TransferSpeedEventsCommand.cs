@@ -26,7 +26,7 @@ namespace DataMigrator.Commands;
 
 public sealed class TransferSpeedEventsCommand : Command, ICommandOption<MigrationCommandConfiguration>
 {
-    public TransferSpeedEventsCommand() : base("transfer-speed", "Move ATSPM 4.3 speed events from SQL Server into the configured ATSPM 5.2 target")
+    public TransferSpeedEventsCommand() : base("transfer-speed", "Move ATSPM 4.3 speed events from SQL Server into the configured ATSPM 5 target")
     {
         AddOption(SourceOption);
         AddOption(StartOption);
@@ -36,7 +36,7 @@ public sealed class TransferSpeedEventsCommand : Command, ICommandOption<Migrati
 
     public Option<string> SourceOption { get; } = new("--source", "Connection string for the ATSPM 4.3 SQL Server source") { IsRequired = true };
     public Option<DateTime> StartOption { get; } = new("--start", "Start date for the speed-event transfer") { IsRequired = true };
-    public Option<DateTime> EndOption { get; } = new("--end", "End date for the speed-event transfer") { IsRequired = true };
+    public Option<DateTime> EndOption { get; } = new("--end", "Inclusive end; a date-only value includes the whole end day") { IsRequired = true };
     public Option<string> LocationsOption { get; } = new("--locations", "Comma-separated list of location identifiers") { IsRequired = false };
 
     public ModelBinder<MigrationCommandConfiguration> GetOptionsBinder()

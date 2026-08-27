@@ -34,7 +34,7 @@ public sealed class CommandTests
         var names = command.Subcommands.Select(subcommand => subcommand.Name).OrderBy(name => name).ToArray();
 
         Assert.Equal(
-            ["transfer-config", "transfer-events", "transfer-speed", "upgrade-to-5-2"],
+            ["transfer-config", "transfer-events", "transfer-speed", "upgrade-to-5"],
             names);
     }
 
@@ -65,7 +65,7 @@ public sealed class CommandTests
     [Fact]
     public void UpgradeCommand_RequiresSourceStartAndEnd()
     {
-        var command = new UpgradeTo52Command();
+        var command = new UpgradeTo5Command();
 
         Assert.True(command.SourceOption.IsRequired);
         Assert.True(command.StartOption.IsRequired);
@@ -78,12 +78,12 @@ public sealed class CommandTests
     [Fact]
     public void UpgradeCommand_BindsSkipFlagsFromCommandLine()
     {
-        var command = new UpgradeTo52Command();
+        var command = new UpgradeTo5Command();
         var parser = new System.CommandLine.Parsing.Parser(command);
         var parseResult = parser.Parse(["--source", "source", "--start", "2024-01-01", "--end", "2024-01-02", "--skip-config", "--skip-events", "--skip-speed"], "");
         var invocationContext = new System.CommandLine.Invocation.InvocationContext(parseResult, new System.CommandLine.IO.TestConsole());
 
-        var options = (UpgradeTo52CommandConfiguration)command.GetOptionsBinder().CreateInstance(invocationContext.BindingContext)!;
+        var options = (UpgradeTo5CommandConfiguration)command.GetOptionsBinder().CreateInstance(invocationContext.BindingContext)!;
 
         Assert.True(options.SkipConfig);
         Assert.True(options.SkipEvents);

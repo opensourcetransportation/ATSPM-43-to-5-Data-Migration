@@ -43,7 +43,7 @@ commandBuilder.UseHost(
             services.AddAtspmEFEventLogRepositories();
             services.Configure<MigrationCommandConfiguration>(hostContext.Configuration.GetSection(nameof(MigrationCommandConfiguration)));
             services.Configure<TransferConfigCommandConfiguration>(hostContext.Configuration.GetSection(nameof(TransferConfigCommandConfiguration)));
-            services.Configure<UpgradeTo52CommandConfiguration>(hostContext.Configuration.GetSection(nameof(UpgradeTo52CommandConfiguration)));
+            services.Configure<UpgradeTo5CommandConfiguration>(hostContext.Configuration.GetSection(nameof(UpgradeTo5CommandConfiguration)));
         }),
     host =>
     {

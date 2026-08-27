@@ -1,6 +1,6 @@
 #region license
 // Copyright 2026 Utah Departement of Transportation
-// for DataMigrator - DataMigrator.Services/UpgradeTo52HostedService.cs
+// for DataMigrator - DataMigrator.Services/UpgradeTo5HostedService.cs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,15 +23,15 @@ using System.Diagnostics;
 
 namespace DataMigrator.Services;
 
-public sealed class UpgradeTo52HostedService : IHostedService
+public sealed class UpgradeTo5HostedService : IHostedService
 {
-    private readonly ILogger<UpgradeTo52HostedService> _logger;
+    private readonly ILogger<UpgradeTo5HostedService> _logger;
     private readonly IConfigurationMigrationService _configurationMigrationService;
     private readonly IEventLogMigrationService _eventLogMigrationService;
     private readonly ISpeedEventMigrationService _speedEventMigrationService;
-    private readonly UpgradeTo52CommandConfiguration _options;
+    private readonly UpgradeTo5CommandConfiguration _options;
 
-    public UpgradeTo52HostedService(ILogger<UpgradeTo52HostedService> logger, IConfigurationMigrationService configurationMigrationService, IEventLogMigrationService eventLogMigrationService, ISpeedEventMigrationService speedEventMigrationService, IOptions<UpgradeTo52CommandConfiguration> options)
+    public UpgradeTo5HostedService(ILogger<UpgradeTo5HostedService> logger, IConfigurationMigrationService configurationMigrationService, IEventLogMigrationService eventLogMigrationService, ISpeedEventMigrationService speedEventMigrationService, IOptions<UpgradeTo5CommandConfiguration> options)
     {
         _logger = logger;
         _configurationMigrationService = configurationMigrationService;
@@ -90,7 +90,7 @@ public sealed class UpgradeTo52HostedService : IHostedService
 
         overallStopwatch.Stop();
         _logger.LogInformation(
-            "Upgrade-to-5-2 orchestration completed in {ElapsedMs} ms. SkipConfig={SkipConfig}, SkipEvents={SkipEvents}, SkipSpeed={SkipSpeed}.",
+            "Upgrade-to-5 orchestration completed in {ElapsedMs} ms. SkipConfig={SkipConfig}, SkipEvents={SkipEvents}, SkipSpeed={SkipSpeed}.",
             overallStopwatch.ElapsedMilliseconds,
             _options.SkipConfig,
             _options.SkipEvents,

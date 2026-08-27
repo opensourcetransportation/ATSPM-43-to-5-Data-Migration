@@ -6,10 +6,10 @@
     <Nullable>enable</Nullable>
     <AssemblyName>DataMigrator</AssemblyName>
     <RootNamespace>DataMigrator</RootNamespace>
-    <Version>5.2.0</Version>
+    <Version>5.0.0</Version>
     <Authors>OpenSourceTransportation</Authors>
     <Company>OpenSourceTransportation</Company>
-    <Description>Data migration utility for moving ATSPM 4.3 data into ATSPM 5.2.</Description>
+    <Description>Data migration utility for moving ATSPM 4.3 data into a configured ATSPM 5 target.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/opensourcetransportation/ATSPM-43-to-5-Data-Migration</PackageProjectUrl>
     <RepositoryUrl>https://github.com/opensourcetransportation/ATSPM-43-to-5-Data-Migration</RepositoryUrl>

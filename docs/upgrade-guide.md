@@ -1,18 +1,20 @@
 # Upgrade Guide
 
-This is the recommended flow for moving from ATSPM 4.3 to ATSPM 5.2 with `DataMigrator`.
+This is the recommended flow for moving from ATSPM 4.3 to an ATSPM 5 target with `DataMigrator`.
 
 ## Before You Start
 
 - Confirm the source ATSPM 4.3 database is SQL Server.
-- Confirm the target ATSPM 5.2 environment is reachable and configured.
-- Confirm the ATSPM 5.2 provider and destination connection strings are set correctly.
+- Confirm the target ATSPM 5 environment is reachable and configured.
+- Confirm the provider and destination connection strings are set correctly.
+- Confirm the source and target logins have the permissions in [Configuration and Permissions](configuration.md).
+- Back up the target configuration database before any run that uses `--delete`.
 - Decide the date range for event and speed migration.
 
 ## Recommended Flow
 
-1. Validate the target configuration for the ATSPM 5.2 environment.
-2. Start with a clean configuration replacement.
+1. Validate the target configuration for the ATSPM 5 environment.
+2. Back up the target, then start with a clean configuration replacement if required.
 3. Run event-log migration for the required range.
 4. Run speed-event migration for the required range if speed data is used.
 5. Validate migrated locations, devices, and event data before cutover.
@@ -22,8 +24,8 @@ This is the recommended flow for moving from ATSPM 4.3 to ATSPM 5.2 with `DataMi
 For the standard path, use:
 
 ```powershell
-dotnet run --project . -- upgrade-to-5-2 `
-  --source "Server=sql01;Database=ATSPM;User Id=sa;Password=..." `
+dotnet run --project . -- upgrade-to-5 `
+  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
   --start 2024-01-01T00:00:00 `
   --end 2024-01-07T23:59:59
 ```
@@ -34,14 +36,15 @@ Configuration:
 
 ```powershell
 dotnet run --project . -- transfer-config `
-  --source "Server=sql01;Database=ATSPM;User Id=sa;Password=..."
+  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+  --delete
 ```
 
 Events:
 
 ```powershell
 dotnet run --project . -- transfer-events `
-  --source "Server=sql01;Database=ATSPM;User Id=sa;Password=..." `
+  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
   --start 2024-01-01T00:00:00 `
   --end 2024-01-07T23:59:59
 ```
@@ -50,7 +53,7 @@ Speed:
 
 ```powershell
 dotnet run --project . -- transfer-speed `
-  --source "Server=sql01;Database=ATSPM;User Id=sa;Password=..." `
+  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
   --start 2024-01-01 `
   --end 2024-01-07
 ```
@@ -83,9 +86,11 @@ Example values used below:
 
 Run a clean configuration replacement before event or speed validation:
 
+Do this only after backing up the target and confirming both source and target connection strings.
+
 ```powershell
 dotnet run --project . -- transfer-config `
-  --source "Server=sql01;Database=ATSPM;User Id=sa;Password=..." `
+  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
   --delete
 ```
 
@@ -106,7 +111,7 @@ Why start this way:
 
 ```powershell
 dotnet run --project . -- transfer-events `
-  --source "Server=sql01;Database=ATSPM;User Id=sa;Password=..." `
+  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
   --start 2024-01-01T00:00:00 `
   --end 2024-01-01T23:59:59 `
   --locations 1234
@@ -141,7 +146,7 @@ Verify after the rerun:
 
 ```powershell
 dotnet run --project . -- transfer-speed `
-  --source "Server=sql01;Database=ATSPM;User Id=sa;Password=..." `
+  --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
   --start 2024-01-01 `
   --end 2024-01-01 `
   --locations 1234

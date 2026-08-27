@@ -26,7 +26,7 @@ namespace DataMigrator.Commands;
 
 public sealed class TransferConfigCommand : Command, ICommandOption<TransferConfigCommandConfiguration>
 {
-    public TransferConfigCommand() : base("transfer-config", "Move ATSPM 4.3 configuration data from SQL Server into the configured ATSPM 5.2 target")
+    public TransferConfigCommand() : base("transfer-config", "Move ATSPM 4.3 configuration data from SQL Server into the configured ATSPM 5 target")
     {
         AddOption(SourceOption);
         AddOption(DeleteOption);
@@ -36,8 +36,8 @@ public sealed class TransferConfigCommand : Command, ICommandOption<TransferConf
 
     public Option<string> SourceOption { get; } = new("--source", "Connection string for the ATSPM 4.3 SQL Server source") { IsRequired = true };
     public Option<bool> DeleteOption { get; } = new("--delete", "Delete target configuration data before importing");
-    public Option<bool> UpdateLocationsOption { get; } = new("--update-locations", () => true, "Import configuration and location data into the target");
-    public Option<bool> ImportSpeedDevicesOption { get; } = new("--update-speed", () => true, "Import speed-device configuration into the target");
+    public Option<bool> UpdateLocationsOption { get; } = new("--update-locations", () => true, "Import configuration and location data into the target (enabled by default)");
+    public Option<bool> ImportSpeedDevicesOption { get; } = new("--update-speed", () => true, "Import speed-device configuration, not speed events (enabled by default)");
 
     public ModelBinder<TransferConfigCommandConfiguration> GetOptionsBinder()
     {

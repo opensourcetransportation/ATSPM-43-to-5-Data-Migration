@@ -2,14 +2,14 @@
 
 ## Summary
 
-This repository is the extracted `.NET 8` migration utility for moving ATSPM 4.3 data into an ATSPM 5.3 environment.
+This repository is the extracted `.NET 8` migration utility for moving ATSPM 4.3 data into a configured ATSPM 5 environment.
 
 Core product rules:
 
 - Source is always SQL Server.
 - Target provider is configuration-driven.
-- Supported commands are `transfer-config`, `transfer-events`, `transfer-speed`, and `upgrade-to-5-2`.
-- IIS-oriented documentation uses `C:\inetpub` as the default IIS path.
+- Supported commands are `transfer-config`, `transfer-events`, `transfer-speed`, and `upgrade-to-5`.
+- Installation documentation uses a neutral dedicated tools directory rather than assuming IIS deployment.
 
 ## Current Status
 
@@ -19,25 +19,26 @@ Core product rules:
 - Automated tests added for speed migration source-connection normalization (`BuildSourceConnectionString`) and rerun-safe key matching (`GetExistingLogsAsync`) in `SpeedEventMigrationServiceTests`.
 - Automated tests added for migration orchestration edge cases: all skip-flag combinations and failure propagation for both config and event phases.
 - Operator-facing troubleshooting documentation expanded to cover long-running speed imports, rerun replacement behavior, duplicate detection queries, source gap comparison, and upgrade command skip flags.
-- Created a standalone root-level `.NET 8` solution around [DataMigrator.csproj](DataMigrator.csproj).
+- Created a standalone root-level `.NET 8` solution around [DataMigrator.csproj](../../DataMigrator.csproj).
 - Reduced the command surface to:
   - `transfer-config`
   - `transfer-events`
   - `transfer-speed`
-  - `upgrade-to-5-2`
+  - `upgrade-to-5`
 - Removed unrelated `DatabaseInstaller` commands from the extracted tool.
 - Replaced source project coupling with NuGet package references.
-- Switched UDOT package references to the republished online `5.3.0-rc5` package set and removed the temporary local NuGet feed workaround.
+- Switched UDOT package references to the republished online package set, later advancing to the stable `5.3.1` packages, and removed the temporary local NuGet feed workaround.
 - Added PostgreSQL target schema migration handling for the republished UDOT package model, including the official `20260521163837_5_3` config migration bridge needed by the current package metadata.
 - Flattened the repo layout so the app lives at the repository root instead of under `src/`.
-- Added release automation scaffolding under [.github/workflows](.github/workflows) for:
+- Added release automation scaffolding under [.github/workflows](../../.github/workflows) for:
   - Windows executable packaging
   - container image publishing
-- Added documentation structure under [docs](docs).
-- Added starter test coverage under [tests/DataMigrator.Tests](tests/DataMigrator.Tests).
+- Added documentation structure under [docs](..).
+- Added starter test coverage under [tests/DataMigrator.Tests](../../tests/DataMigrator.Tests).
 
 ### Verified
 
+- Re-verified locally on 2026-08-27: all 83 automated tests pass against the `5.3.1` package baseline.
 - Re-verified locally on 2026-04-13: `dotnet build .\DataMigrator.csproj -c Release` succeeds.
 - Re-verified locally on 2026-04-10: `dotnet test .\DataMigrator.slnx -c Release` passes with 17 tests.
 - Re-verified locally on 2026-05-29: `dotnet test .\DataMigrator.slnx -c Release` passes with 24 tests.
@@ -150,7 +151,7 @@ Validated live against the configured source and target:
 
 ### Package Feed Validation
 
-The online feeds now restore the UDOT package set through `Utah.Udot.Atspm` and `Utah.Udot.Atspm.Infrastructure` `5.3.0-rc5`.
+The online feeds now restore `Utah.Udot.Atspm` and `Utah.Udot.Atspm.Infrastructure` `5.3.1`.
 
 The local package feed workaround is no longer required.
 

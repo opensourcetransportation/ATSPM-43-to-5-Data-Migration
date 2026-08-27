@@ -1,81 +1,101 @@
 # Installation
 
-## Windows / EXE
+Choose the Windows executable, container image, or source-build path. In every case, prepare the target settings described in [Configuration and Permissions](configuration.md) before starting a migration.
 
-Release builds publish a self-contained Windows executable. No .NET SDK is required on the target machine.
+## Windows Executable
 
-### Steps
+Release builds contain a self-contained Windows x64 executable, so the target machine does not need the .NET SDK.
 
-1. Go to the [GitHub Releases](../../releases) page and download the latest `ATSPM-43-to-5-Data-Migration-win-x64-<version>.zip`.
-
-2. Extract the ZIP to a working directory, for example:
-
-   ```
-   C:\inetpub\DataMigrator\
-   ```
-
-3. Open `appsettings.json` in that directory and configure the ATSPM 5.2 target connection strings. See [Configuration](configuration.md) for details.
-
-4. Run the tool from a command prompt or PowerShell:
+1. Open the repository's [GitHub Releases](https://github.com/opensourcetransportation/ATSPM-43-to-5-Data-Migration/releases) page.
+2. Download `ATSPM-43-to-5-Data-Migration-win-x64-<version>.zip` from the desired release.
+3. Extract the ZIP into a dedicated directory, such as `C:\Tools\DataMigrator`.
+4. Configure `appsettings.json` in the extracted application directory.
+5. Confirm the executable and configuration are working:
 
    ```powershell
-   .\DataMigrator.exe transfer-config --source "Server=sql01;Database=ATSPM;User Id=sa;Password=..."
+   .\DataMigrator.exe --help
+   .\DataMigrator.exe transfer-config --help
    ```
 
-   Replace the source connection string with your ATSPM 4.3 SQL Server details.
+6. Start with a non-destructive configuration import or a narrow event slice:
 
-5. For sensitive environments, use environment variables or [.NET User Secrets](https://learn.microsoft.com/en-us/aspnet/core/security/app-secrets) instead of storing credentials in `appsettings.json`.
+   ```powershell
+   .\DataMigrator.exe transfer-events `
+     --source "Server=sql01;Database=MOE;User Id=...;Password=..." `
+     --start 2024-01-01T09:00:00 `
+     --end 2024-01-01T09:59:59 `
+     --locations 1234
+   ```
 
----
+Run commands from the extracted application directory so the bundled `appsettings.json` is found.
 
 ## Container
 
-Release builds publish a container image to the GitHub Container Registry (GHCR).
+Release builds publish to the repository-derived GitHub Container Registry path:
 
-The image is published at:
-
-```
-ghcr.io/udot-utah/atspm-43-to-5-data-migration:<version>
+```text
+ghcr.io/opensourcetransportation/atspm-43-to-5-data-migration:<tag>
 ```
 
-### Steps
+Stable releases also publish `latest`; version tags normally include the leading `v` from the GitHub release tag.
 
-1. Pull the image:
+```bash
+docker pull ghcr.io/opensourcetransportation/atspm-43-to-5-data-migration:latest
+```
 
-   ```bash
-   docker pull ghcr.io/udot-utah/atspm-43-to-5-data-migration:latest
-   ```
+Mount a complete settings file read-only:
 
-2. Mount a local `appsettings.json` with your target connection strings and run the desired command:
+```bash
+docker run --rm \
+  -v "$(pwd)/appsettings.json:/app/appsettings.json:ro" \
+  ghcr.io/opensourcetransportation/atspm-43-to-5-data-migration:latest \
+  transfer-config \
+  --source "Server=sql01;Database=MOE;User Id=...;Password=..."
+```
 
-   ```bash
-   docker run --rm \
-     -v "$(pwd)/appsettings.json:/app/appsettings.json" \
-     ghcr.io/udot-utah/atspm-43-to-5-data-migration:latest \
-     transfer-config --source "Server=sql01;Database=ATSPM;User Id=sa;Password=..."
-   ```
+Or supply the required target contexts as environment variables:
 
-3. Alternatively, pass connection strings as environment variables using the standard .NET configuration override format:
+```bash
+docker run --rm \
+  -e "ConnectionStrings__ConfigContext__Provider=PostgreSql" \
+  -e "ConnectionStrings__ConfigContext__ConnectionString=Host=db01;Database=atspm;Username=...;Password=..." \
+  -e "ConnectionStrings__EventLogContext__Provider=PostgreSql" \
+  -e "ConnectionStrings__EventLogContext__ConnectionString=Host=db01;Database=atspm;Username=...;Password=..." \
+  ghcr.io/opensourcetransportation/atspm-43-to-5-data-migration:latest \
+  transfer-events \
+  --source "Server=sql01;Database=MOE;User Id=...;Password=..." \
+  --start 2024-01-01T09:00:00 \
+  --end 2024-01-01T09:59:59 \
+  --locations 1234
+```
 
-   ```bash
-   docker run --rm \
-     -e "ConnectionStrings__ConfigContext__Provider=PostgreSql" \
-     -e "ConnectionStrings__ConfigContext__ConnectionString=Host=db01;..." \
-     ghcr.io/udot-utah/atspm-43-to-5-data-migration:latest \
-     transfer-config --source "Server=sql01;Database=ATSPM;User Id=sa;Password=..."
-   ```
+The container must be able to resolve and reach both database hosts. Do not use `localhost` for a database running on the host unless the container runtime is configured to route it appropriately.
 
----
+## Build From Source
 
-## Building From Source
-
-Requires the [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8).
+Install the [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8), then run:
 
 ```powershell
-git clone https://github.com/udot-utah/ATSPM-43-to-5-Data-Migration.git
+git clone https://github.com/opensourcetransportation/ATSPM-43-to-5-Data-Migration.git
 cd ATSPM-43-to-5-Data-Migration
+dotnet restore
 dotnet build
-dotnet run --project . -- transfer-config --source "..."
+dotnet run --project . -- --help
 ```
 
-See [Configuration](configuration.md) before running to set up the target connection strings.
+To run a command from source:
+
+```powershell
+dotnet run --project . -- transfer-config `
+  --source "Server=sql01;Database=MOE;User Id=...;Password=..."
+```
+
+## Installation Check
+
+Before a production run, verify:
+
+- `--help` starts without an assembly or runtime error.
+- The source SQL Server is reachable from the execution environment.
+- The configured target contexts use the expected provider and database.
+- The database logins have the permissions listed in [Configuration and Permissions](configuration.md).
+- A target backup exists before any `--delete` run.

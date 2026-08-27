@@ -5,7 +5,7 @@ Thank you for your interest in contributing to ATSPM-43-to-5-Data-Migration.
 ## Prerequisites
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8)
-- Access to an ATSPM 4.3 SQL Server source and an ATSPM 5.2 target for live testing
+- Access to an ATSPM 4.3 SQL Server source and an ATSPM 5 target for live testing
 - The local NuGet package feed (see [Configuration](docs/configuration.md)) until UDOT packages are published to a public feed
 
 ## Building
