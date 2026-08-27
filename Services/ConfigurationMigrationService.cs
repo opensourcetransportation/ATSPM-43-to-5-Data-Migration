@@ -34,6 +34,8 @@ namespace DataMigrator.Services;
 
 public class ConfigurationMigrationService : IConfigurationMigrationService
 {
+    private const int SourceQueryTimeoutSeconds = 300;
+
     private readonly ILogger<ConfigurationMigrationService> _logger;
     private readonly IJurisdictionRepository _jurisdictionRepository;
     private readonly ILocationTypeRepository _locationTypeRepository;
@@ -266,7 +268,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex.Message, "Error importing speed devices");
+                _logger.LogError(ex, "Error importing speed devices");
                 throw;
             }
         }
@@ -302,7 +304,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex.Message, $"Error importing speed device {device.DeviceIdentifier}");
+                    _logger.LogError(ex, "Error importing speed device {DeviceIdentifier}", device.DeviceIdentifier);
                 }
             }
         }
@@ -317,7 +319,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex.Message, "Error deleting products");
+            _logger.LogError(ex, "Error deleting products");
             throw;
         }
     }
@@ -331,7 +333,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex.Message, "Error deleting device configurations");
+            _logger.LogError(ex, "Error deleting device configurations");
             throw;
         }
     }
@@ -469,7 +471,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex.Message, $"Error importing approach {approach.Id}");
+                    _logger.LogError(ex, "Error importing approach {ApproachId}", approach.Id);
                 }
 
             }
@@ -603,7 +605,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex.Message, $"Error importing detector {detector.DectectorIdentifier}");
+                    _logger.LogError(ex, "Error importing detector {DetectorIdentifier}", detector.DectectorIdentifier);
                 }
             }
         }
@@ -641,7 +643,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex.Message, "Error importing locations");
+                _logger.LogError(ex, "Error importing locations");
                 throw;
             }
         }
@@ -658,7 +660,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex.Message, $"Error importing location {location.LocationIdentifier}");
+                    _logger.LogError(ex, "Error importing location {LocationIdentifier}", location.LocationIdentifier);
                 }
             }
         }
@@ -737,7 +739,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex.Message, "Error deleting jurisdictions");
+            _logger.LogError(ex, "Error deleting jurisdictions");
             throw;
         }
     }
@@ -752,7 +754,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex.Message, "Error deleting areas");
+            _logger.LogError(ex, "Error deleting areas");
             throw;
         }
     }
@@ -767,7 +769,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex.Message, "Error deleting regions");
+            _logger.LogError(ex, "Error deleting regions");
             throw;
         }
 
@@ -982,7 +984,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         using (var sourceConnection = new SqlConnection(_config.Source))
         {
             sourceConnection.Open();
-            using (SqlCommand sourceCommand = new SqlCommand(query, sourceConnection))
+            using (SqlCommand sourceCommand = CreateSourceCommand(query, sourceConnection))
             {
                 using (SqlDataReader reader = sourceCommand.ExecuteReader())
                 {
@@ -1074,6 +1076,12 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         return entities;
     }
 
+    internal static SqlCommand CreateSourceCommand(string query, SqlConnection sourceConnection) =>
+        new(query, sourceConnection)
+        {
+            CommandTimeout = SourceQueryTimeoutSeconds
+        };
+
     public static Dictionary<string, Dictionary<string, string>> GetColumnMappings(IConfiguration configuration)
     {
         // Retrieve the "ColumnMappings" section from the configuration
@@ -1156,7 +1164,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex.Message, "Error deleting locations");
+            _logger.LogError(ex, "Error deleting locations");
             throw;
         }
     }
@@ -1170,7 +1178,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex.Message, "Error deleting devices");
+            _logger.LogError(ex, "Error deleting devices");
             throw;
         }
     }

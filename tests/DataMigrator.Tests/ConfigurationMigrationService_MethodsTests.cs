@@ -5,6 +5,7 @@ using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 using DataMigrator.Services;
@@ -18,6 +19,15 @@ namespace DataMigrator.Tests
 {
     public class ConfigurationMigrationService_MethodsTests
     {
+        [Fact]
+        public void CreateSourceCommand_UsesExtendedTimeout()
+        {
+            using var connection = new SqlConnection();
+            using var command = ConfigurationMigrationService.CreateSourceCommand("SELECT 1", connection);
+
+            Assert.Equal(300, command.CommandTimeout);
+        }
+
         [Fact]
         public void GetColumnMappings_ReturnsMappingsFromConfiguration()
         {

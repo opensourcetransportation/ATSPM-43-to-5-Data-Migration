@@ -358,6 +358,7 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
 
         return locationsQuery
             .FromSpecification(new ActiveLocationSpecification())
+            .ToList()
             .GroupBy(location => location.LocationIdentifier)
             .Select(group => group.OrderByDescending(location => location.Start).FirstOrDefault()!)
             .ToList();
