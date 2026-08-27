@@ -59,6 +59,7 @@ public sealed class UpgradeTo5HostedService : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        ValidateOptions();
         var overallStopwatch = Stopwatch.StartNew();
         using var scope = _scopeFactory?.CreateScope();
         var configurationMigrationService = _configurationMigrationService ?? scope!.ServiceProvider.GetRequiredService<IConfigurationMigrationService>();
@@ -121,6 +122,26 @@ public sealed class UpgradeTo5HostedService : IHostedService
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    private void ValidateOptions()
+    {
+        if (_options.SkipConfig && _options.SkipEvents && _options.SkipSpeed)
+        {
+            throw new InvalidOperationException("At least one migration phase must be enabled.");
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.Source))
+        {
+            throw new InvalidOperationException(
+                "A source connection string is required through --source or UpgradeTo5CommandConfiguration:Source.");
+        }
+
+        if ((!_options.SkipEvents || !_options.SkipSpeed) && (_options.Start == default || _options.End == default))
+        {
+            throw new InvalidOperationException(
+                "Start and end are required for event or speed migration through command-line options or UpgradeTo5CommandConfiguration.");
+        }
+    }
 
     private async Task RunPhaseAsync(string phaseName, Func<CancellationToken, Task> action, CancellationToken cancellationToken)
     {

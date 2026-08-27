@@ -880,7 +880,6 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             return;
         }
 
-        await RemoveLegacySyntheticMigrationHistoryAsync(configContext, cancellationToken);
         var pendingMigrations = (await configContext.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
         if (pendingMigrations.Count > 0)
         {
@@ -892,22 +891,6 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
 
         await ApplyPostgreSqlConfig53MigrationBridgeAsync(configContext, cancellationToken);
-    }
-
-    internal const string RemoveLegacySyntheticMigrationHistorySql = """
-        DO $$
-        BEGIN
-            IF to_regclass('public."__EFMigrationsHistory"') IS NOT NULL THEN
-                DELETE FROM public."__EFMigrationsHistory"
-                WHERE "MigrationId" = '20260521163837_5_3'
-                    AND "ProductVersion" = '8.0.22';
-            END IF;
-        END $$;
-        """;
-
-    private async Task RemoveLegacySyntheticMigrationHistoryAsync(ConfigContext configContext, CancellationToken cancellationToken)
-    {
-        await configContext.Database.ExecuteSqlRawAsync(RemoveLegacySyntheticMigrationHistorySql, cancellationToken);
     }
 
     internal const string PostgreSqlConfigCompatibilitySql = """
@@ -1017,7 +1000,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             {
                 using (SqlDataReader reader = sourceCommand.ExecuteReaderAsync(_cancellationToken).GetAwaiter().GetResult())
                 {
-                    while (reader.ReadAsync(_cancellationToken).GetAwaiter().GetResult())
+                    while (reader.Read())
                     {
                         _cancellationToken.ThrowIfCancellationRequested();
                         var entity = new T(); // Create an instance of the generic type

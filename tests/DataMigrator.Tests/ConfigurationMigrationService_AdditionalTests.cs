@@ -17,18 +17,10 @@ namespace DataMigrator.Tests
     public class ConfigurationMigrationService_AdditionalTests
     {
         [Fact]
-        public void PostgreSqlCompatibilityBridge_DoesNotForgeMigrationHistory()
+        public void PostgreSqlCompatibilityBridge_DoesNotModifyMigrationHistory()
         {
             Assert.DoesNotContain("__EFMigrationsHistory", ConfigurationMigrationService.PostgreSqlConfigCompatibilitySql, StringComparison.Ordinal);
             Assert.DoesNotContain("ProductVersion", ConfigurationMigrationService.PostgreSqlConfigCompatibilitySql, StringComparison.Ordinal);
-        }
-
-        [Fact]
-        public void LegacyMigrationHistoryCleanup_OnlyTargetsSyntheticBridgeVersion()
-        {
-            Assert.Contains("20260521163837_5_3", ConfigurationMigrationService.RemoveLegacySyntheticMigrationHistorySql, StringComparison.Ordinal);
-            Assert.Contains("8.0.22", ConfigurationMigrationService.RemoveLegacySyntheticMigrationHistorySql, StringComparison.Ordinal);
-            Assert.Contains("DELETE", ConfigurationMigrationService.RemoveLegacySyntheticMigrationHistorySql, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]

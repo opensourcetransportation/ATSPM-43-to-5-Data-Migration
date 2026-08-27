@@ -283,7 +283,7 @@ public sealed class SpeedEventMigrationService : ISpeedEventMigrationService
             cmd.Parameters.Add("@endUtc", SqlDbType.DateTime2).Value = endUtc;
             for (var index = 0; index < detectorChunk.Length; index++)
             {
-                cmd.Parameters.Add($"@detectorId{index}", SqlDbType.NVarChar, 50).Value = detectorChunk[index];
+                cmd.Parameters.Add($"@detectorId{index}", SqlDbType.VarChar, 50).Value = detectorChunk[index];
             }
 
             cmd.CommandTimeout = SourceQueryTimeoutSeconds;

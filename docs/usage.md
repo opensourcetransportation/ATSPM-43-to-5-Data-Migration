@@ -20,7 +20,7 @@ Start and end values are inclusive. Processing is divided into hourly windows.
 | Speed `--end 2024-01-07` | Includes the entire January 7 date |
 | Speed `--end 2024-01-07T12:00:00` | Stops at the stated inclusive time |
 
-Date-only end values have the same whole-day meaning for event, speed, and combined migrations.
+Date-only end values in culture-supported forms, such as `2024-01-07` or `01/07/2024`, have the same whole-day meaning for event, speed, and combined migrations.
 An explicit midnight value such as `--end 2024-01-07T00:00:00` includes only that instant; use `--end 2024-01-07` to include the entire date.
 
 ## `transfer-config`

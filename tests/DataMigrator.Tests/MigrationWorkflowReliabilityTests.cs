@@ -393,13 +393,14 @@ public sealed class MigrationWorkflowReliabilityTests
     }
 
     [Fact]
-    public async Task EventRunAsync_PersistsBoundedLocationGroupsBeforeFleetHourCompletes()
+    public async Task EventRunAsync_HonorsInsertBatchAcrossBoundedSourceReadGroups()
     {
-        using var provider = BuildEventLogProvider();
+        var interceptor = new FailingSaveChangesInterceptor(failuresBeforeSuccess: 0);
+        using var provider = BuildEventLogProvider(interceptor);
         var locations = Enumerable.Range(0, 25)
             .Select(index => CreateEventLocation($"L{index:D3}", index + 1))
             .ToArray();
-        var persistedBeforeSecondGroup = false;
+        var firstBatchPersistedBeforeThirdGroup = false;
         var service = new EventLogMigrationService(
             NullLogger<EventLogMigrationService>.Instance,
             provider,
@@ -407,10 +408,10 @@ public sealed class MigrationWorkflowReliabilityTests
             Policy.Handle<Exception>().RetryAsync(0),
             (start, end, _, location, _) =>
             {
-                if (location.LocationIdentifier == "L010")
+                if (location.LocationIdentifier == "L020")
                 {
                     using var scope = provider.CreateScope();
-                    persistedBeforeSecondGroup = scope.ServiceProvider
+                    firstBatchPersistedBeforeThirdGroup = scope.ServiceProvider
                         .GetRequiredService<EventLogContext>()
                         .IndiannaEvents
                         .Any();
@@ -419,9 +420,12 @@ public sealed class MigrationWorkflowReliabilityTests
                 return Task.FromResult<CompressedEventLogs<IndianaEvent>?>(CreateEventLog(location, start, end));
             });
 
-        await service.RunAsync(CreateMigrationConfiguration(), CancellationToken.None);
+        var configuration = CreateMigrationConfiguration();
+        configuration.Batch = 20;
+        await service.RunAsync(configuration, CancellationToken.None);
 
-        Assert.True(persistedBeforeSecondGroup);
+        Assert.True(firstBatchPersistedBeforeThirdGroup);
+        Assert.Equal(2, interceptor.Attempts);
         await using var verificationScope = provider.CreateAsyncScope();
         Assert.Equal(25, await verificationScope.ServiceProvider.GetRequiredService<EventLogContext>().IndiannaEvents.CountAsync());
     }

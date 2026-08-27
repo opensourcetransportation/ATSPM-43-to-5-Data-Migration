@@ -105,6 +105,8 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
         {
             processedHours++;
             _logger.LogInformation("Processing event data from {Start} to {End}", periodStart, periodEnd);
+            var pendingLogs = new List<CompressedEventLogs<IndianaEvent>>();
+            var batchSize = config.Batch ?? 500;
             foreach (var locationGroup in locations.Chunk(MaxConcurrentSourceReads))
             {
                 var groupLogs = new ConcurrentBag<CompressedEventLogs<IndianaEvent>>();
@@ -152,7 +154,17 @@ public sealed class EventLogMigrationService : IEventLogMigrationService
                 var groupLogList = groupLogs.ToList();
                 totalCompressedWindows += groupLogList.Count;
                 totalSourceEvents += groupLogList.Sum(log => log.Data.Count);
-                await InsertLogsWithRetryAsync(groupLogList, config, cancellationToken);
+                pendingLogs.AddRange(groupLogList);
+                while (pendingLogs.Count >= batchSize)
+                {
+                    await InsertLogsWithRetryAsync(pendingLogs.GetRange(0, batchSize), config, cancellationToken);
+                    pendingLogs.RemoveRange(0, batchSize);
+                }
+            }
+
+            if (pendingLogs.Count > 0)
+            {
+                await InsertLogsWithRetryAsync(pendingLogs, config, cancellationToken);
             }
         }
 

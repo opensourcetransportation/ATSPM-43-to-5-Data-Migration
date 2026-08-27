@@ -87,6 +87,7 @@ public sealed class MigrationDateRangeTests
 
     [Theory]
     [InlineData("2024-01-02", true)]
+    [InlineData("01/07/2024", true)]
     [InlineData("2024-01-02T00:00:00", false)]
     [InlineData("2024-01-02 00:00:00", false)]
     public void IsDateOnly_DistinguishesDateOnlyFromExplicitMidnight(string value, bool expected)

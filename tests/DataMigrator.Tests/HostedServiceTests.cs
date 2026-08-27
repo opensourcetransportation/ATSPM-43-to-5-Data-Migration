@@ -241,6 +241,51 @@ public sealed class HostedServiceTests
     }
 
     [Fact]
+    public async Task UpgradeHostedService_ConfigOnlyWithoutSourceFailsBeforeRunningAnyPhase()
+    {
+        var invocations = new List<string>();
+        var service = new UpgradeTo5HostedService(
+            NullLogger<UpgradeTo5HostedService>.Instance,
+            new RecordingConfigurationMigrationService(invocations),
+            new RecordingEventLogMigrationService(invocations),
+            new RecordingSpeedEventMigrationService(invocations),
+            Options.Create(new UpgradeTo5CommandConfiguration
+            {
+                SkipEvents = true,
+                SkipSpeed = true
+            }));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.StartAsync(CancellationToken.None));
+
+        Assert.Contains("source connection string", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(invocations);
+    }
+
+    [Fact]
+    public async Task UpgradeHostedService_AllPhasesSkippedFailsInsteadOfReportingSuccess()
+    {
+        var invocations = new List<string>();
+        var service = new UpgradeTo5HostedService(
+            NullLogger<UpgradeTo5HostedService>.Instance,
+            new RecordingConfigurationMigrationService(invocations),
+            new RecordingEventLogMigrationService(invocations),
+            new RecordingSpeedEventMigrationService(invocations),
+            Options.Create(new UpgradeTo5CommandConfiguration
+            {
+                SkipConfig = true,
+                SkipEvents = true,
+                SkipSpeed = true
+            }));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.StartAsync(CancellationToken.None));
+
+        Assert.Contains("at least one migration phase", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(invocations);
+    }
+
+    [Fact]
     public async Task UpgradeHostedService_StopsAfterConfigurationFailure()
     {
         var invocations = new List<string>();
