@@ -25,7 +25,7 @@ An explicit midnight value such as `--end 2024-01-07T00:00:00` includes only tha
 
 ## `transfer-config`
 
-Imports ATSPM configuration and speed-device configuration.
+Imports ATSPM configuration and speed-device configuration. Speed devices are derived only from the latest non-deleted signal version; older versions do not create duplicate devices.
 
 ```powershell
 dotnet run --project . -- transfer-config `
@@ -40,6 +40,8 @@ dotnet run --project . -- transfer-config `
 | `--update-speed` | Default `true` | Enables speed-device configuration import; this does not migrate speed event rows |
 
 `--delete` removes target configuration records and resets identities on PostgreSQL. The service checks that the source contains `dbo.Signals` before deletion, but operators must still verify both connection strings and take a backup.
+
+To import only speed-device configuration, use `--update-locations false --update-speed true`. This does not populate API keys or `DeviceProperties`. Do not combine a speed-only refresh with `--delete`, because `--delete` clears the complete configuration entity set.
 
 ## `transfer-events`
 

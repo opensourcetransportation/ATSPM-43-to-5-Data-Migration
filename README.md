@@ -4,7 +4,8 @@
 
 ## What It Migrates
 
-- Configuration: locations, approaches, detectors, devices, areas, routes, and related records
+- Configuration: locations, approaches, detectors, controller devices, areas, routes, and related records
+- Speed-device configuration derived from the latest non-deleted ATSPM 4.3 signal version
 - Controller event logs from `dbo.Controller_Event_Log`
 - Speed events from `dbo.Speed_Events`
 - All three phases through the guided `upgrade-to-5` command
@@ -41,6 +42,8 @@ Set at least `ConfigContext` for configuration migration and `EventLogContext` f
 
 Documented production target provider names are `PostgreSql`, `SqlServer`, `MySql`, and `Oracle`. Do not commit credentials; use environment variables or another supported .NET configuration source in production.
 
+ATSPM Docker development environments can also supply their existing `DatabaseConfiguration:*` settings through user secrets or `DatabaseConfiguration__*` environment variables. When the migrator runs in a container, configure database hosts as Docker service/container names or another address reachable from that container; `localhost` refers to the migrator container itself.
+
 ## 2. Migrate Configuration
 
 ```powershell
@@ -48,7 +51,20 @@ dotnet run --project . -- transfer-config `
   --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..."
 ```
 
+This imports the main configuration and speed-device configuration by default. To reload only speed devices without deleting locations, detectors, controller devices, or other configuration, run:
+
+```powershell
+dotnet run --project . -- transfer-config `
+  --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." `
+  --update-locations false `
+  --update-speed true
+```
+
+Speed-device selection uses exactly one row per `SignalID`: the latest non-deleted `Signals` version, ordered by `Start` and then `VersionID`. The latest version must have a detection-type `3` detector and a nonzero numeric latitude. Older versions do not create extra devices, and a signal whose latest version no longer qualifies is omitted. The import assigns the shared `Speed` device configuration and a placeholder IP address of `127.0.0.1`; it does not migrate speed-event rows, API keys, or `DeviceProperties`.
+
 For a clean replacement, first take a backup and then add `--delete`.
+
+`--delete` removes the full target configuration set, not only speed devices. Do not use it for a speed-device-only refresh.
 
 ## 3. Validate a Small Event Slice
 

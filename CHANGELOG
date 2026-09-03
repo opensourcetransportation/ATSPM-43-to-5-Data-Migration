@@ -4,6 +4,19 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-03
+
+### Fixed
+
+- Speed-device configuration migration now selects only the latest non-deleted signal version per `SignalID`, preventing historical IP-address or enabled-state changes from creating duplicate devices
+- Speed-device eligibility is evaluated against the latest signal version, so signals that only qualified on an older version are no longer imported
+
+### Documentation
+
+- Documented the speed-device-only command, latest-version selection, Docker target configuration, placeholder IP behavior, and the scope of `--delete`
+
+## [1.0.0] - 2026-08-27
+
 ### Added
 
 - Initial release of DataMigrator as a standalone .NET 8 migration utility

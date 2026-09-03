@@ -41,6 +41,20 @@ namespace DataMigrator.Tests
         }
 
         [Fact]
+        public void DefaultSpeedDevicesQuery_SelectsLatestSignalVersion()
+        {
+            var configuration = new ConfigurationBuilder()
+                .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"), optional: false)
+                .Build();
+            var query = configuration["LocationQueries:SpeedDevices"];
+
+            Assert.NotNull(query);
+            Assert.Contains("SELECT TOP 1 latest.VersionID", query, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("latest.[Start] DESC, latest.VersionID DESC", query, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("GROUP BY s.SignalID", query, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
         public void GetColumnMappings_ReturnsMappingsFromConfiguration()
         {
             var settings = new Dictionary<string, string>
