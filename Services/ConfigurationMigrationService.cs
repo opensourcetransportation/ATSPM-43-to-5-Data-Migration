@@ -23,7 +23,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Data;
 using System.Text.Json;
 using Utah.Udot.Atspm.Data;
 using Utah.Udot.Atspm.Data.Enums;
@@ -376,7 +375,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         _logger.LogInformation($"Importing Jurisdictions...");
         var jurisdictions = ImportData<Jurisdiction>(queries["Jurisdictions"], columnMappings["Jurisdictions"]);
-        _jurisdictionRepository.AddRange(jurisdictions);
+        AddEntitiesWithIdentityInsert(jurisdictions, entities => _jurisdictionRepository.AddRange(entities));
         _logger.LogInformation($"Jurisdictions Imported");
     }
 
@@ -389,7 +388,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         _logger.LogInformation($"Importing Areas...");
         var areas = ImportData<Area>(queries["Areas"], columnMappings["Areas"]);
-        _areaRepository.AddRange(areas);
+        AddEntitiesWithIdentityInsert(areas, entities => _areaRepository.AddRange(entities));
         _logger.LogInformation($"Areas Imported");
     }
 
@@ -402,7 +401,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         _logger.LogInformation($"Importing Regions...");
         var regions = ImportData<Region>(queries["Regions"], columnMappings["Regions"]);
-        _regionsRepository.AddRange(regions);
+        AddEntitiesWithIdentityInsert(regions, entities => _regionsRepository.AddRange(entities));
         _logger.LogInformation($"Regions Imported");
     }
 
@@ -415,7 +414,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         _logger.LogInformation($"Importing Routes");
         var routes = ImportData<Route>(queries["Routes"], columnMappings["Routes"]);
-        _routeRepository.AddRange(routes);
+        AddEntitiesWithIdentityInsert(routes, entities => _routeRepository.AddRange(entities));
         _logger.LogInformation($"Routes Imported");
     }
 
@@ -428,7 +427,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         _logger.LogInformation($"Importing Route Locations");
         var routeLocations = ImportData<RouteLocation>(queries["RouteLocations"], columnMappings["RouteLocations"]);
-        _routeLocationsRepository.AddRange(routeLocations);
+        AddEntitiesWithIdentityInsert(routeLocations, entities => _routeLocationsRepository.AddRange(entities));
         _logger.LogInformation($"Route Locations Imported");
     }
 
@@ -442,7 +441,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         _logger.LogInformation("Adding Device Configurations");
         var deviceConfigurations = ImportData<DeviceConfiguration>(queries["DeviceConfigurations"], columnMappings["DeviceConfigurations"]);
-        _deviceConfigurationRepository.AddRange(deviceConfigurations);
+        AddEntitiesWithIdentityInsert(deviceConfigurations, entities => _deviceConfigurationRepository.AddRange(entities));
         _logger.LogInformation("Device Configurations Added");
     }
 
@@ -455,7 +454,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         }
         _logger.LogInformation("Adding Products");
         var products = ImportData<Product>(queries["Products"], columnMappings["Products"]);
-        _productRepository.AddRange(products);
+        AddEntitiesWithIdentityInsert(products, entities => _productRepository.AddRange(entities));
         _logger.LogInformation("Products Added");
     }
 
@@ -482,7 +481,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             {
                 _cancellationToken.ThrowIfCancellationRequested();
                 var batch = approaches.Skip(i * batchSize).Take(batchSize).ToList();
-                _approachRepository.AddRange(batch);
+                AddEntitiesWithIdentityInsert(batch, entities => _approachRepository.AddRange(entities));
                 _logger.LogInformation($"Batch {i + 1}/{batches} imported ({batch.Count} approaches).");
             }
 
@@ -496,7 +495,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             {
                 try
                 {
-                    _approachRepository.AddRange(newApproaches);
+                    AddEntitiesWithIdentityInsert(newApproaches, entities => _approachRepository.AddRange(entities));
                     _logger.LogInformation("Imported {Count} new approaches", newApproaches.Count);
                 }
                 catch (Exception ex)
@@ -507,7 +506,6 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             }
         }
     }
-
 
     private void ImportDevices(Dictionary<string, string> queries, Dictionary<string, Dictionary<string, string>> columnMappings)
     {
@@ -604,7 +602,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
                 _cancellationToken.ThrowIfCancellationRequested();
                 var batch = detectors.Skip(i).Take(batchSize).ToList();
                 WireDetectionTypesCore(batch, detectionTypes, detectionTypeDetectors, _cancellationToken);
-                _detectorRepository.AddRange(batch);
+                AddEntitiesWithIdentityInsert(batch, entities => _detectorRepository.AddRange(entities));
                 _logger.LogInformation($"Processed batch of {batch.Count} detectors");
             }
 
@@ -619,7 +617,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
                 try
                 {
                     WireDetectionTypesCore(newDetectors, detectionTypes, detectionTypeDetectors, _cancellationToken);
-                    _detectorRepository.AddRange(newDetectors);
+                    AddEntitiesWithIdentityInsert(newDetectors, entities => _detectorRepository.AddRange(entities));
                     _logger.LogInformation("Imported {Count} new detectors with detection-type mappings", newDetectors.Count);
                 }
                 catch (Exception ex)
@@ -691,7 +689,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
         {
             try
             {
-                _locationRepository.AddRange(locations);
+                AddEntitiesWithIdentityInsert(locations, entities => _locationRepository.AddRange(entities));
                 _logger.LogInformation($"Locations Imported");
             }
             catch (Exception ex)
@@ -708,7 +706,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             {
                 try
                 {
-                    _locationRepository.AddRange(newLocations);
+                    AddEntitiesWithIdentityInsert(newLocations, entities => _locationRepository.AddRange(entities));
                     _logger.LogInformation("Imported {Count} new locations", newLocations.Count);
                 }
                 catch (Exception ex)
@@ -717,6 +715,35 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
                     throw;
                 }
             }
+        }
+    }
+
+    private void AddEntitiesWithIdentityInsert<TEntity>(List<TEntity> entities, Action<List<TEntity>> addRange)
+        where TEntity : class
+    {
+        var configContext = _serviceProvider.GetRequiredService<ConfigContext>();
+
+        if (!configContext.Database.IsSqlServer() || entities.Count == 0)
+        {
+            addRange(entities);
+            return;
+        }
+        // When SqlServer is used, we need to enable IDENTITY_INSERT for the table to allow inserting values into identity columns.
+        var entityType = configContext.Model.FindEntityType(typeof(TEntity))!;
+        var qualifiedTableName = $"[{entityType.GetSchema() ?? "dbo"}].[{entityType.GetTableName()}]";
+        var identityInsertOnSql = $"SET IDENTITY_INSERT {qualifiedTableName} ON;";
+        var identityInsertOffSql = $"SET IDENTITY_INSERT {qualifiedTableName} OFF;";
+
+        configContext.Database.OpenConnection();
+        try
+        {
+            configContext.Database.ExecuteSqlRaw(identityInsertOnSql);
+            addRange(entities);
+        }
+        finally
+        {
+            configContext.Database.ExecuteSqlRaw(identityInsertOffSql);
+            configContext.Database.CloseConnection();
         }
     }
 
