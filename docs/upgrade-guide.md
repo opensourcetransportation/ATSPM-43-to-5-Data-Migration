@@ -6,7 +6,7 @@ This is the recommended flow for moving from ATSPM 4.3 to an ATSPM 5 target with
 
 - Confirm the source ATSPM 4.3 database is SQL Server.
 - Confirm the target ATSPM 5 environment is reachable and configured.
-- Confirm the provider and destination connection strings are set correctly.
+- Confirm the provider and destination `DatabaseConfiguration` values are set correctly.
 - Confirm the source and target logins have the permissions in [Configuration and Permissions](configuration.md).
 - Back up the target configuration database before any run that uses `--delete`.
 - Decide the date range for event and speed migration.
@@ -86,7 +86,7 @@ Example values used below:
 
 Run a clean configuration replacement before event or speed validation:
 
-Do this only after backing up the target and confirming both source and target connection strings.
+Do this only after backing up the target and confirming both source and target database configuration.
 
 ```powershell
 dotnet run --project . -- transfer-config `

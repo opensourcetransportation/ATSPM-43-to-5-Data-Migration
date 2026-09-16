@@ -22,14 +22,14 @@ Configuration source reads use a 300-second command timeout. Controller-event re
 
 ## Target Connections
 
-Target settings live under `ConnectionStrings`. Documented production provider names are:
+Target settings live under `DatabaseConfiguration`. Each context is configured with `DBType`, `Host`, `Database`, `User`, `Password`, and optional provider-specific `Options`. Documented production provider names are:
 
 - `PostgreSql`
 - `SqlServer`
 - `MySql`
 - `Oracle`
 
-Provider names should be entered exactly as shown. Configure the contexts required by the command:
+Configure all four contexts. The migration phases use the contexts below, but the ATSPM infrastructure validates all four context configurations during startup:
 
 | Command or phase | Required target context |
 | --- | --- |
@@ -42,30 +42,66 @@ Example PostgreSQL configuration:
 
 ```json
 {
-  "ConnectionStrings": {
+  "DatabaseConfiguration": {
     "ConfigContext": {
-      "Provider": "PostgreSql",
-      "ConnectionString": "Host=db01;Database=atspm;Username=...;Password=..."
+      "DBType": "PostgreSql",
+      "Host": "db01",
+      "Database": "atspm",
+      "User": "...",
+      "Password": "..."
     },
     "EventLogContext": {
-      "Provider": "PostgreSql",
-      "ConnectionString": "Host=db01;Database=atspm;Username=...;Password=..."
+      "DBType": "PostgreSql",
+      "Host": "db01",
+      "Database": "atspm",
+      "User": "...",
+      "Password": "..."
+    },
+    "AggregationContext": {
+      "DBType": "PostgreSql",
+      "Host": "db01",
+      "Database": "atspm",
+      "User": "...",
+      "Password": "..."
+    },
+    "IdentityContext": {
+      "DBType": "PostgreSql",
+      "Host": "db01",
+      "Database": "atspm",
+      "User": "...",
+      "Password": "..."
     }
   }
 }
 ```
 
-`AggregationContext` and `IdentityContext` are present in the starter file for compatibility with the wider ATSPM configuration but are not directly used by these migration phases.
+`AggregationContext` and `IdentityContext` are not directly used by these migration phases, but they must still be present and valid because the ATSPM infrastructure validates all four database contexts during startup.
 
 ## Environment Variables
 
 .NET maps double underscores to nested configuration keys. For example:
 
 ```powershell
-$env:ConnectionStrings__ConfigContext__Provider = "PostgreSql"
-$env:ConnectionStrings__ConfigContext__ConnectionString = "Host=db01;Database=atspm;Username=...;Password=..."
-$env:ConnectionStrings__EventLogContext__Provider = "PostgreSql"
-$env:ConnectionStrings__EventLogContext__ConnectionString = "Host=db01;Database=atspm;Username=...;Password=..."
+$env:DatabaseConfiguration__ConfigContext__DBType = "PostgreSql"
+$env:DatabaseConfiguration__ConfigContext__Host = "db01"
+$env:DatabaseConfiguration__ConfigContext__Database = "atspm"
+$env:DatabaseConfiguration__ConfigContext__User = "..."
+$env:DatabaseConfiguration__ConfigContext__Password = "..."
+$env:DatabaseConfiguration__EventLogContext__DBType = "PostgreSql"
+$env:DatabaseConfiguration__EventLogContext__Host = "db01"
+$env:DatabaseConfiguration__EventLogContext__Database = "atspm"
+$env:DatabaseConfiguration__EventLogContext__User = "..."
+$env:DatabaseConfiguration__EventLogContext__Password = "..."
+$env:DatabaseConfiguration__AggregationContext__DBType = "PostgreSql"
+$env:DatabaseConfiguration__AggregationContext__Host = "db01"
+$env:DatabaseConfiguration__AggregationContext__Database = "atspm"
+$env:DatabaseConfiguration__AggregationContext__User = "..."
+$env:DatabaseConfiguration__AggregationContext__Password = "..."
+$env:DatabaseConfiguration__IdentityContext__DBType = "PostgreSql"
+$env:DatabaseConfiguration__IdentityContext__Host = "db01"
+$env:DatabaseConfiguration__IdentityContext__Database = "atspm"
+$env:DatabaseConfiguration__IdentityContext__User = "..."
+$env:DatabaseConfiguration__IdentityContext__Password = "..."
 ```
 
 The application loads the standard .NET host configuration sources, the local `appsettings.json`, optional user secrets, environment variables, and command-line values. Prefer an environment-specific secret store or environment variables for production credentials. The explicit command-line `--source`, `--start`, and `--end` values control the current run.
@@ -97,7 +133,7 @@ The service performs a source-schema preflight before deleting target configurat
 
 ## Repository Configuration Files
 
-- [`appsettings.json`](../appsettings.json) contains the starter connection shape, source queries, and column mappings.
+- [`appsettings.json`](../appsettings.json) contains the starter database configuration shape, source queries, and column mappings.
 - [`nuget.config`](../nuget.config) defines the feeds used to restore the UDOT packages.
 
 Do not put production passwords in committed copies of either documentation examples or `appsettings.json`.

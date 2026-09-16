@@ -10,7 +10,7 @@
 - Speed events from `dbo.Speed_Events`
 - All three phases through the guided `upgrade-to-5` command
 
-The source is always ATSPM 4.3 on SQL Server. The target provider and database are selected through the ATSPM connection-string configuration.
+The source is always ATSPM 4.3 on SQL Server. The target provider and database are selected through the ATSPM `DatabaseConfiguration` configuration.
 
 ## Before You Run It
 
@@ -21,26 +21,46 @@ The source is always ATSPM 4.3 on SQL Server. The target provider and database a
 - Back up the target configuration database before using `--delete`. That option removes existing target configuration before importing it again.
 - Start with one known location and a short time range before running a production-sized migration.
 
-See [Configuration](docs/configuration.md) for connection strings, provider names, permissions, and schema behavior.
+See [Configuration](docs/configuration.md) for database configuration, provider names, permissions, and schema behavior.
 
 ## 1. Configure the Target
 
-Set at least `ConfigContext` for configuration migration and `EventLogContext` for event or speed migration:
+Configure all four contexts under `DatabaseConfiguration`. `ConfigContext` is used for configuration migration and `EventLogContext` is used for event or speed migration; the ATSPM infrastructure validates the complete context configuration during startup:
 
 ```json
-"ConnectionStrings": {
+"DatabaseConfiguration": {
   "ConfigContext": {
-    "Provider": "PostgreSql",
-    "ConnectionString": "Host=db01;Database=atspm;Username=...;Password=..."
+    "DBType": "PostgreSql",
+    "Host": "db01",
+    "Database": "atspm",
+    "User": "...",
+    "Password": "..."
   },
   "EventLogContext": {
-    "Provider": "PostgreSql",
-    "ConnectionString": "Host=db01;Database=atspm;Username=...;Password=..."
+    "DBType": "PostgreSql",
+    "Host": "db01",
+    "Database": "atspm",
+    "User": "...",
+    "Password": "..."
+  },
+  "AggregationContext": {
+    "DBType": "PostgreSql",
+    "Host": "db01",
+    "Database": "atspm",
+    "User": "...",
+    "Password": "..."
+  },
+  "IdentityContext": {
+    "DBType": "PostgreSql",
+    "Host": "db01",
+    "Database": "atspm",
+    "User": "...",
+    "Password": "..."
   }
 }
 ```
 
-Documented production target provider names are `PostgreSql`, `SqlServer`, `MySql`, and `Oracle`. Do not commit credentials; use environment variables or another supported .NET configuration source in production.
+Documented production target provider names are `PostgreSql`, `SqlServer`, `MySql`, and `Oracle`. Add provider-specific values under `Options` when needed. Do not commit credentials; use environment variables or another supported .NET configuration source in production.
 
 ATSPM Docker development environments can also supply their existing `DatabaseConfiguration:*` settings through user secrets or `DatabaseConfiguration__*` environment variables. When the migrator runs in a container, configure database hosts as Docker service/container names or another address reachable from that container; `localhost` refers to the migrator container itself.
 

@@ -5,7 +5,7 @@
 Before digging into migration behavior:
 
 - Verify the `--source` SQL Server connection string points at the expected ATSPM 4.3 database.
-- Verify all target connection strings and provider values for the ATSPM 5 environment.
+- Verify all target `DatabaseConfiguration` context values and provider settings for the ATSPM 5 environment.
 - Confirm the selected date range and optional `--locations` filter match the slice you intend to migrate.
 - Prefer a narrow validation slice first, such as one location for one hour, before retrying a wide migration window.
 

@@ -24,7 +24,7 @@ All 17+ tests should pass with no warnings before submitting a pull request.
 
 ## Running Locally
 
-1. Configure target connection strings in `appsettings.json` or via user secrets.
+1. Configure target database settings under `DatabaseConfiguration` in `appsettings.json` or via user secrets.
 2. Run any command directly:
 
 ```powershell
