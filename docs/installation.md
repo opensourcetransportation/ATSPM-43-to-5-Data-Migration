@@ -10,7 +10,7 @@ Release builds contain a self-contained Windows x64 executable, so the target ma
 2. Download `ATSPM-43-to-5-Data-Migration-win-x64-<version>.zip` from the desired release.
 3. Extract the ZIP into a dedicated directory, such as `C:\Tools\DataMigrator`.
 4. Configure `appsettings.json` in the extracted application directory.
-5. Confirm the executable and configuration are working:
+5. Confirm the executable starts and shows its options:
 
    ```powershell
    .\DataMigrator.exe --help
@@ -53,14 +53,11 @@ docker run --rm \
   --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..."
 ```
 
-Or supply the required target contexts as environment variables:
+Or use `--env-file` with the [target environment variable names](configuration.md#environment-variables). Include entries for all four contexts. For example, a line in the file is `DatabaseConfiguration__ConfigContext__DBType=PostgreSql`. Keep the file private and leave the corresponding fields unset in the bundled settings.
 
 ```bash
 docker run --rm \
-  -e "ConnectionStrings__ConfigContext__Provider=PostgreSql" \
-  -e "ConnectionStrings__ConfigContext__ConnectionString=Host=db01;Database=atspm;Username=...;Password=..." \
-  -e "ConnectionStrings__EventLogContext__Provider=PostgreSql" \
-  -e "ConnectionStrings__EventLogContext__ConnectionString=Host=db01;Database=atspm;Username=...;Password=..." \
+  --env-file ./.env \
   ghcr.io/opensourcetransportation/atspm-43-to-5-data-migration:latest \
   transfer-events \
   --source "Server=sql01;Database=ATSPM43;User Id=...;Password=..." \

@@ -25,24 +25,9 @@ See [Configuration](docs/configuration.md) for connection strings, provider name
 
 ## 1. Configure the Target
 
-Set at least `ConfigContext` for configuration migration and `EventLogContext` for event or speed migration:
+Use the [complete target configuration example](docs/configuration.md#target-connections) to fill in the `DatabaseConfiguration` section of `appsettings.json`. Each context uses separate fields such as `DBType`, `Host`, `Database`, `User`, and `Password`. The migrator validates all four context entries at startup, even for a speed-device-only refresh.
 
-```json
-"ConnectionStrings": {
-  "ConfigContext": {
-    "Provider": "PostgreSql",
-    "ConnectionString": "Host=db01;Database=atspm;Username=...;Password=..."
-  },
-  "EventLogContext": {
-    "Provider": "PostgreSql",
-    "ConnectionString": "Host=db01;Database=atspm;Username=...;Password=..."
-  }
-}
-```
-
-Documented production target provider names are `PostgreSql`, `SqlServer`, `MySql`, and `Oracle`. Do not commit credentials; use environment variables or another supported .NET configuration source in production.
-
-ATSPM Docker development environments can also supply their existing `DatabaseConfiguration:*` settings through user secrets or `DatabaseConfiguration__*` environment variables. When the migrator runs in a container, configure database hosts as Docker service/container names or another address reachable from that container; `localhost` refers to the migrator container itself.
+The target comes from the effective `ConfigContext`; `--source` points to the legacy SQL Server database. Check the logged target server and database when running `transfer-config`. User secrets can override values in the settings file beside the executable.
 
 ## 2. Migrate Configuration
 

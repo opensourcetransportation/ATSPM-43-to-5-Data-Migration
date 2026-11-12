@@ -22,53 +22,83 @@ Configuration source reads use a 300-second command timeout. Controller-event re
 
 ## Target Connections
 
-Target settings live under `ConnectionStrings`. Documented production provider names are:
+Target settings live under `DatabaseConfiguration:<ContextName>`. The migrator builds each connection string from fields such as `DBType`, `Host`, `Database`, `User`, and `Password`. Replace any older `ConnectionStrings` examples with this format. Documented production provider names are:
 
 - `PostgreSql`
 - `SqlServer`
 - `MySql`
 - `Oracle`
 
-Provider names should be entered exactly as shown. Configure the contexts required by the command:
+Use the provider names shown above for `DBType`. Supply valid settings for all four contexts because the host validates them at startup. The migration phases access these target databases:
 
-| Command or phase | Required target context |
+| Command or phase | Target contexts used |
 | --- | --- |
 | `transfer-config` | `ConfigContext` |
 | `transfer-events` | `ConfigContext` and `EventLogContext` |
 | `transfer-speed` | `ConfigContext` and `EventLogContext` |
 | `upgrade-to-5` | `ConfigContext` and `EventLogContext` unless the corresponding phases are skipped |
 
-Example PostgreSQL configuration:
+Example PostgreSQL settings. Replace the `DatabaseConfiguration` section in the bundled `appsettings.json` and keep the other sections, including the source queries. This example uses one database for all four contexts; use the corresponding database names if your ATSPM deployment separates them.
 
 ```json
 {
-  "ConnectionStrings": {
+  "DatabaseConfiguration": {
     "ConfigContext": {
-      "Provider": "PostgreSql",
-      "ConnectionString": "Host=db01;Database=atspm;Username=...;Password=..."
+      "DBType": "PostgreSql",
+      "Host": "db01",
+      "Port": 5432,
+      "Database": "atspm",
+      "User": "migration_user",
+      "Password": "replace-with-your-password"
     },
     "EventLogContext": {
-      "Provider": "PostgreSql",
-      "ConnectionString": "Host=db01;Database=atspm;Username=...;Password=..."
+      "DBType": "PostgreSql",
+      "Host": "db01",
+      "Port": 5432,
+      "Database": "atspm",
+      "User": "migration_user",
+      "Password": "replace-with-your-password"
+    },
+    "AggregationContext": {
+      "DBType": "PostgreSql",
+      "Host": "db01",
+      "Port": 5432,
+      "Database": "atspm",
+      "User": "migration_user",
+      "Password": "replace-with-your-password"
+    },
+    "IdentityContext": {
+      "DBType": "PostgreSql",
+      "Host": "db01",
+      "Port": 5432,
+      "Database": "atspm",
+      "User": "migration_user",
+      "Password": "replace-with-your-password"
     }
   }
 }
 ```
 
-`AggregationContext` and `IdentityContext` are present in the starter file for compatibility with the wider ATSPM configuration but are not directly used by these migration phases.
+`AggregationContext` and `IdentityContext` must pass startup validation, but the migration phases do not directly access them.
 
 ## Environment Variables
 
-.NET maps double underscores to nested configuration keys. For example:
+.NET maps double underscores to nested configuration keys. This PowerShell example supplies the same four contexts without putting credentials in the settings file. Set `$dbPassword` from your secret store first.
 
 ```powershell
-$env:ConnectionStrings__ConfigContext__Provider = "PostgreSql"
-$env:ConnectionStrings__ConfigContext__ConnectionString = "Host=db01;Database=atspm;Username=...;Password=..."
-$env:ConnectionStrings__EventLogContext__Provider = "PostgreSql"
-$env:ConnectionStrings__EventLogContext__ConnectionString = "Host=db01;Database=atspm;Username=...;Password=..."
+foreach ($context in 'ConfigContext', 'EventLogContext', 'AggregationContext', 'IdentityContext') {
+    $prefix = "DatabaseConfiguration__${context}__"
+    Set-Item "Env:${prefix}DBType" 'PostgreSql'
+    Set-Item "Env:${prefix}Host" 'db01'
+    Set-Item "Env:${prefix}Database" 'atspm'
+    Set-Item "Env:${prefix}User" 'migration_user'
+    Set-Item "Env:${prefix}Password" $dbPassword
+}
 ```
 
-The application loads the standard .NET host configuration sources, the local `appsettings.json`, optional user secrets, environment variables, and command-line values. Prefer an environment-specific secret store or environment variables for production credentials. The explicit command-line `--source`, `--start`, and `--end` values control the current run.
+The migrator adds the `appsettings.json` beside the executable after the default .NET host sources, including environment variables. It then loads this project's optional .NET user secrets, followed by command-line configuration. Later sources override matching keys. If you supply target settings through environment variables, leave those fields unset in both the bundled file and user secrets. For example, a saved `DatabaseConfiguration:ConfigContext:Host` of `localhost` can override a GCP host in the settings file.
+
+The explicit `--source`, `--start`, and `--end` arguments control the current run. `transfer-config` logs the effective target server and database before making changes; verify they match the environment you intend to update.
 
 ## Target Permissions and Schema
 
