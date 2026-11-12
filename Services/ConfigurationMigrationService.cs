@@ -273,7 +273,7 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             device.DeviceConfiguration = speedDeviceConfiguration;
             if (!latestLocationIds.TryGetValue(device.DeviceIdentifier, out var locationId))
             {
-                _logger.LogInformation($"Location not found for device {device.DeviceIdentifier}");
+                _logger.LogWarning("Speed device {DeviceIdentifier} skipped: no matching target location", device.DeviceIdentifier);
                 continue;
             }
 
@@ -281,60 +281,98 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
             validDevices.Add(device);
         }
 
-        if (_config.Delete)
-        {
-            try
-            {
-                _deviceRepository.AddRange(validDevices);
-                _logger.LogInformation($"Speed Devices Imported");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error importing speed devices");
-                throw;
-            }
-        }
-        else
-        {
-            var existingDevices = _deviceRepository.GetList()
+        var existingDevices = _config.Delete
+            ? new Dictionary<string, Device>(StringComparer.OrdinalIgnoreCase)
+            : _deviceRepository.GetList()
                 .Where(d => d.DeviceType == DeviceTypes.SpeedSensor)
                 .AsEnumerable()
                 .GroupBy(d => d.DeviceIdentifier, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-            var newDevices = new List<Device>();
+        var newDevices = new List<Device>();
+        var updated = 0;
+        var unchanged = 0;
+        var failed = 0;
 
-            foreach (var device in validDevices)
+        foreach (var device in validDevices)
+        {
+            _cancellationToken.ThrowIfCancellationRequested();
+            if (!existingDevices.TryGetValue(device.DeviceIdentifier, out var existingDevice))
             {
-                _cancellationToken.ThrowIfCancellationRequested();
-                try
-                {
-                    if (existingDevices.TryGetValue(device.DeviceIdentifier, out var existingDevice))
-                    {
-                        existingDevice.DeviceConfigurationId = speedDeviceConfiguration.Id;
-                        existingDevice.DeviceConfiguration = speedDeviceConfiguration;
-                        existingDevice.LocationId = device.LocationId;
-                        existingDevice.DeviceType = device.DeviceType;
-                        existingDevice.Ipaddress = device.Ipaddress;
-                        existingDevice.LoggingEnabled = device.LoggingEnabled;
-                        existingDevice.DeviceStatus = device.DeviceStatus;
-                        _deviceRepository.Update(existingDevice);
-                        _logger.LogInformation($"Speed Device {device.DeviceIdentifier} Updated");
-                    }
-                    else
-                    {
-                        newDevices.Add(device);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error importing speed device {DeviceIdentifier}", device.DeviceIdentifier);
-                }
+                newDevices.Add(device);
+                continue;
             }
 
-            if (newDevices.Count != 0)
+            var changes = DescribeSpeedDeviceChanges(existingDevice, device, speedDeviceConfiguration.Id);
+            if (changes.Count == 0)
+            {
+                unchanged++;
+                _logger.LogInformation("Speed device {DeviceIdentifier} unchanged (ID {DeviceId})", device.DeviceIdentifier, existingDevice.Id);
+                continue;
+            }
+
+            try
+            {
+                existingDevice.DeviceConfigurationId = speedDeviceConfiguration.Id;
+                existingDevice.DeviceConfiguration = speedDeviceConfiguration;
+                existingDevice.LocationId = device.LocationId;
+                existingDevice.DeviceType = device.DeviceType;
+                existingDevice.Ipaddress = device.Ipaddress;
+                existingDevice.LoggingEnabled = device.LoggingEnabled;
+                existingDevice.DeviceStatus = device.DeviceStatus;
+                _deviceRepository.Update(existingDevice);
+                updated++;
+                _logger.LogInformation("Speed device {DeviceIdentifier} updated (ID {DeviceId}): {Changes}",
+                    device.DeviceIdentifier, existingDevice.Id, string.Join("; ", changes));
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                _logger.LogError(ex, "Error updating speed device {DeviceIdentifier}", device.DeviceIdentifier);
+            }
+        }
+
+        if (newDevices.Count > 0)
+        {
+            _cancellationToken.ThrowIfCancellationRequested();
+            try
             {
                 _deviceRepository.AddRange(newDevices);
-                _logger.LogInformation("Imported {Count} new speed devices", newDevices.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding batch of {Count} speed devices", newDevices.Count);
+                throw;
+            }
+            foreach (var device in newDevices)
+            {
+                _logger.LogInformation(
+                    "Speed device {DeviceIdentifier} added (ID {DeviceId}): LocationId={LocationId}; DeviceConfigurationId={ConfigurationId}; DeviceType={DeviceType}; Ipaddress={Ipaddress}; LoggingEnabled={LoggingEnabled}; DeviceStatus={DeviceStatus}",
+                    device.DeviceIdentifier, device.Id, device.LocationId, speedDeviceConfiguration.Id,
+                    device.DeviceType, device.Ipaddress, device.LoggingEnabled, device.DeviceStatus);
+            }
+        }
+
+        _logger.LogInformation(
+            "Speed device import summary: {Added} added, {Updated} updated, {Unchanged} unchanged, {Skipped} skipped (no target location), {Failed} failed",
+            newDevices.Count, updated, unchanged, importedDevices.Count - validDevices.Count, failed);
+    }
+
+    internal static List<string> DescribeSpeedDeviceChanges(Device existing, Device incoming, int configurationId)
+    {
+        var changes = new List<string>();
+        Compare(nameof(Device.DeviceConfigurationId), existing.DeviceConfigurationId, (int?)configurationId);
+        Compare(nameof(Device.LocationId), existing.LocationId, incoming.LocationId);
+        Compare(nameof(Device.DeviceType), existing.DeviceType, incoming.DeviceType);
+        Compare(nameof(Device.Ipaddress), existing.Ipaddress, incoming.Ipaddress);
+        Compare(nameof(Device.LoggingEnabled), existing.LoggingEnabled, incoming.LoggingEnabled);
+        Compare(nameof(Device.DeviceStatus), existing.DeviceStatus, incoming.DeviceStatus);
+        return changes;
+
+        void Compare<T>(string field, T before, T after)
+        {
+            if (!EqualityComparer<T>.Default.Equals(before, after))
+            {
+                changes.Add($"{field}: {before?.ToString() ?? "(null)"} -> {after?.ToString() ?? "(null)"}");
             }
         }
     }
@@ -874,6 +912,14 @@ public class ConfigurationMigrationService : IConfigurationMigrationService
     {
         using var scope = _serviceProvider.CreateScope();
         var configContext = scope.ServiceProvider.GetRequiredService<ConfigContext>();
+
+        if (configContext.Database.IsRelational())
+        {
+            var connection = configContext.Database.GetDbConnection();
+            _logger.LogInformation(
+                "Configuration migration target: provider={Provider}; server/data source={DataSource}; database={Database}",
+                configContext.Database.ProviderName, connection.DataSource, connection.Database);
+        }
 
         if (configContext.Database.ProviderName != "Npgsql.EntityFrameworkCore.PostgreSQL")
         {

@@ -62,6 +62,8 @@ dotnet run --project . -- transfer-config `
 
 Speed-device selection uses exactly one row per `SignalID`: the latest non-deleted `Signals` version, ordered by `Start` and then `VersionID`. The latest version must have a detection-type `3` detector and a nonzero numeric latitude. Older versions do not create extra devices, and a signal whose latest version no longer qualifies is omitted. The import assigns the shared `Speed` device configuration and a placeholder IP address of `127.0.0.1`; it does not migrate speed-event rows, API keys, or `DeviceProperties`.
 
+Before making changes, the command logs the effective target provider, server or data source, and database. The speed import logs the settings of each added device, the old and new values for each changed field, and a summary of added, updated, unchanged, skipped, and failed devices. Unchanged devices are not rewritten.
+
 For a clean replacement, first take a backup and then add `--delete`.
 
 `--delete` removes the full target configuration set, not only speed devices. Do not use it for a speed-device-only refresh.
