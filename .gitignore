@@ -47,6 +47,7 @@ artifacts/
 .env
 .env.*
 appsettings.*.local.json
+appsettings.*.json
 secrets.json
 
 # OS files
